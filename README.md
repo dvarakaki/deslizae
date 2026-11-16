@@ -50,30 +50,58 @@ latência mesmo em Wi-Fi instável.
 
 ## Começando
 
-### Requisitos
+Você precisa de um PC com **Windows 10 ou 11** e de um celular conectado na
+**mesma rede** que ele (o mesmo Wi-Fi, por exemplo). No celular não se instala nada.
 
-- Windows 10 ou 11
-- Python 3.11 ou superior
-- Celular e PC na **mesma rede** (Wi-Fi ou cabo)
+### Opção 1: baixar e usar (recomendado)
 
-### Instalação e uso
+Não precisa de Python nem de terminal.
 
-```bat
-git clone https://github.com/dvarakaki/deslizae.git
-cd deslizae
-iniciar.bat
-```
+1. **Baixe o [`Deslizae.exe`](https://github.com/dvarakaki/deslizae/releases/latest)**
+   na página de releases, em *Assets*.
+2. **Dê dois cliques no arquivo.** Como o executável ainda não tem assinatura
+   digital, o Windows pode mostrar *"O Windows protegeu o computador"*: clique em
+   **Mais informações → Executar assim mesmo**.
+3. **Libere o acesso à rede.** O Firewall do Windows pergunta se o Deslizae pode
+   se comunicar: marque **Redes privadas** e clique em **Permitir acesso**.
+4. **Escaneie o QR code.** Abre no PC uma página com o QR code; aponte a câmera
+   do celular para ele e toque no link que aparecer.
+5. **Pronto.** A tela do celular é o touchpad. O indicador **UDP** verde no topo
+   mostra que a conexão está no modo mais rápido.
 
-O `iniciar.bat` cria o ambiente virtual e instala as dependências na primeira
-execução. Depois disso:
+Para encerrar, feche a janela preta do Deslizae. Nas próximas vezes, abra o
+`Deslizae.exe` e, no celular, o mesmo link. Dica: no navegador do celular, use
+**Adicionar à tela inicial** para virar um atalho.
 
-1. Uma página com o **QR code** abre no PC.
-2. Escaneie com a câmera do celular.
-3. Pronto: a tela do celular já é um touchpad.
+### Opção 2: rodar pelo código-fonte
 
-> **Primeira execução:** o Windows pergunta se o Python pode acessar a rede.
-> Permita em **Redes privadas**. A rede do PC precisa estar marcada como
-> **Privada** (Configurações → Rede e Internet → Propriedades).
+1. Instale o **[Python 3.11 ou mais novo](https://www.python.org/downloads/)**.
+   Na primeira tela do instalador, marque **"Add python.exe to PATH"**.
+2. Baixe o projeto: botão **Code → Download ZIP** nesta página (e extraia), ou
+   `git clone https://github.com/dvarakaki/deslizae.git`.
+3. Dê dois cliques em **`iniciar.bat`**. Na primeira vez ele prepara o ambiente
+   e instala as dependências, o que leva alguns minutos.
+4. Siga os passos 3 a 5 da opção 1.
+
+### Não conectou?
+
+Confira nesta ordem:
+
+1. **Mesma rede.** Celular e PC precisam estar no mesmo Wi-Fi (ou o PC no cabo do
+   mesmo roteador). Redes de visitantes e muitas redes corporativas **isolam os
+   aparelhos** entre si. Se for o caso, ative o **roteador/hotspot do celular** e
+   conecte o PC nele: funciona igual.
+2. **Firewall.** Se você clicou em *Cancelar* no aviso do Firewall, abra
+   *Permitir um aplicativo pelo Firewall do Windows* no menu Iniciar, clique em
+   **Alterar configurações** e marque **Privada** na linha do *Deslizae* (ou do
+   *Python*, na opção 2).
+3. **Tipo de rede.** Em *Configurações → Rede e Internet → Wi-Fi* (ou
+   *Ethernet*) → sua rede, escolha **Rede privada**. Em rede pública o Windows
+   bloqueia conexões de entrada.
+4. **VPN ou vários endereços.** A página de pareamento lista os outros endereços
+   do PC em *"O celular não conecta?"*; tente cada um no navegador do celular.
+5. **Antivírus.** Alguns bloqueiam executáveis novos. Libere o `Deslizae.exe` ou
+   use a opção 2.
 
 ## Gestos
 
@@ -107,7 +135,10 @@ conexão UDP e orientação.
 ## Linha de comando
 
 ```
-python -m deslizae [--port 8765] [--no-browser] [--new-token] [--stats] [--dry-run] [-v]
+Deslizae.exe [opções]            (executável)
+python -m deslizae [opções]      (código-fonte)
+
+opções: [--port 8765] [--no-browser] [--new-token] [--stats] [--dry-run] [-v]
 ```
 
 | Opção          | Descrição                                                                 |
@@ -138,28 +169,21 @@ O formato das mensagens está documentado em [`deslizae/protocol.py`](deslizae/p
 
 ## Solução de problemas
 
-<details>
-<summary><b>O celular não conecta</b></summary>
-
-- Confirme que celular e PC estão na mesma rede.
-- Libere o Python no Firewall do Windows em **Redes privadas** e marque a rede do PC como **Privada**.
-- Se o PC tiver vários endereços (VPN, máquinas virtuais), a página de pareamento lista
-  os outros em "O celular não conecta?".
-</details>
+Para problemas de conexão, veja [Não conectou?](#não-conectou).
 
 <details>
 <summary><b>O indicador mostra TCP em vez de UDP</b></summary>
 
 O WebRTC não conseguiu abrir o caminho UDP, geralmente por bloqueio do firewall. O
 Deslizae continua funcionando pelo WebSocket, mas fica mais sensível a perdas no Wi-Fi.
-Verifique se o Python está liberado no firewall para a rede atual.
+Verifique se o Deslizae (ou o Python) está liberado no firewall para a rede atual.
 </details>
 
 <details>
 <summary><b>O cursor não mexe em algumas janelas</b></summary>
 
 Janelas abertas **como administrador** e a tela do UAC não aceitam entrada de programas
-comuns (proteção do Windows). Rode o `iniciar.bat` como administrador para controlá-las.
+comuns (proteção do Windows). Abra o Deslizae com **Executar como administrador** para controlá-las.
 </details>
 
 <details>
@@ -179,6 +203,17 @@ python -m venv .venv
 
 Para trabalhar na página sem mexer no cursor, use `python -m deslizae --dry-run -v`.
 
+### Gerando o executável
+
+```bat
+.venv\Scripts\pip install -e .[build]
+.venv\Scripts\python -m PyInstaller packaging\deslizae.spec --noconfirm
+```
+
+O resultado fica em `dist\Deslizae.exe`. Ao publicar uma tag `vX.Y.Z`, o workflow
+[`release.yml`](.github/workflows/release.yml) gera o executável, roda os testes e
+o anexa à release com o SHA-256 e as notas do CHANGELOG.
+
 ### Estrutura
 
 ```
@@ -193,7 +228,8 @@ deslizae/
   netinfo.py      descoberta do IP local
   static/         página do celular (index.html, app.js, style.css) e de pareamento
 tests/            testes automatizados (pytest), incluindo WebRTC ponta a ponta
-scripts/          utilitários (geração do ícone PNG)
+packaging/        receita do PyInstaller, ponto de entrada e ícone do executável
+scripts/          utilitários (ícones e notas de release)
 ```
 
 ## Contribuindo
