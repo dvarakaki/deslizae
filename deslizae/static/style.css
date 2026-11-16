@@ -1,0 +1,344 @@
+:root {
+  --bg: #0b0d12;
+  --surface: #11141b;
+  --surface-2: #171b24;
+  --line: #232937;
+  --text: #e8ebf2;
+  --muted: #8a93a6;
+  --accent: #5b8cff;
+  --accent-soft: rgba(91, 140, 255, 0.18);
+  --ok: #3ccf8e;
+  --warn: #f4b740;
+  --bad: #ff5d5d;
+  --radius: 18px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+/* Contêiner da interface. Normalmente ocupa a tela; quando o celular não
+   gira sozinho, o app.js define tamanho e "transform" para girá-lo 90°.
+   Elementos "fixed" lá dentro (ajustes, avisos) giram junto. */
+.app {
+  position: fixed;
+  left: 0; top: 0;
+  width: 100%; height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+  transform-origin: 0 0;
+  overflow: hidden;
+}
+/* Girada, as margens seguras do sistema não correspondem mais aos lados. */
+.app.rotated { padding: 0; }
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* ---------- barra superior ---------- */
+.bar {
+  flex: none;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px 0 16px;
+}
+.conn { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+  transition: background .2s;
+}
+.dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.bad { background: var(--bad); }
+.host {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.latency {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--muted);
+}
+.transport {
+  font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  padding: 2px 6px; border-radius: 6px;
+  border: 1px solid var(--line); color: var(--muted);
+}
+.transport:empty { display: none; }
+.transport.udp { color: var(--ok); border-color: rgba(60, 207, 142, .4); }
+.transport.tcp { color: var(--warn); border-color: rgba(244, 183, 64, .4); }
+.latency.warn { color: var(--warn); }
+.latency.bad { color: var(--bad); }
+.actions { display: flex; }
+.icon-btn {
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  border-radius: 12px;
+}
+.icon-btn:active { background: var(--surface-2); }
+.icon-btn svg {
+  width: 22px; height: 22px;
+  fill: none; stroke: var(--text); stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* ---------- superfície de toque ---------- */
+.surface {
+  position: relative;
+  flex: 1;
+  margin: 0 10px;
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at 1px 1px, rgba(255,255,255,.05) 1px, transparent 0) 0 0 / 22px 22px,
+    linear-gradient(180deg, var(--surface-2), var(--surface));
+  border: 1px solid var(--line);
+  overflow: hidden;
+  touch-action: none;
+}
+.surface.dragging { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+.hint {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  gap: 6px;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  pointer-events: none;
+  transition: opacity .6s;
+}
+.hint p { margin: 0; }
+.hint b { color: var(--text); font-weight: 600; }
+.hint.hidden { opacity: 0; }
+
+.touch-dot {
+  position: absolute; left: 0; top: 0;
+  width: 56px; height: 56px; margin: -28px 0 0 -28px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-soft) 0, transparent 70%);
+  border: 1px solid rgba(91,140,255,.35);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+  transition: opacity .15s;
+}
+.touch-dot.on { opacity: 1; }
+
+.drag-badge {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px; font-weight: 600;
+  pointer-events: none;
+}
+
+/* ---------- botões físicos ---------- */
+.buttons {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  height: 72px;
+  padding: 8px 10px 10px;
+}
+.buttons[hidden] { display: none; }
+.mbtn {
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  touch-action: none;
+  transition: background .06s;
+}
+.mbtn.pressed { background: var(--accent-soft); border-color: var(--accent); }
+
+/* ---------- sobreposição de conexão ---------- */
+.overlay {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+  padding: 24px;
+  background: rgba(11, 13, 18, .86);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  z-index: 20;
+  transition: opacity .2s;
+}
+.overlay.hidden { opacity: 0; pointer-events: none; }
+.overlay-card { max-width: 340px; text-align: center; }
+.overlay-card h2 { margin: 16px 0 8px; font-size: 18px; }
+.overlay-card p { margin: 0 0 16px; color: var(--muted); white-space: pre-line; }
+.spinner {
+  width: 32px; height: 32px; margin: 0 auto;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  animation: spin .8s linear infinite;
+}
+.spinner[hidden] { display: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.primary {
+  background: var(--accent);
+  color: #fff;
+  padding: 11px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+/* ---------- painel de ajustes ---------- */
+.sheet-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 30;
+}
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 8px 20px calc(20px + var(--safe-bottom));
+  background: var(--surface-2);
+  border-radius: 20px 20px 0 0;
+  border-top: 1px solid var(--line);
+  z-index: 31;
+  touch-action: pan-y;
+  animation: up .2s ease-out;
+}
+@keyframes up { from { transform: translateY(30px); opacity: 0; } }
+.sheet-handle { width: 40px; height: 4px; margin: 4px auto 12px; border-radius: 2px; background: var(--line); }
+.sheet h2 { margin: 0 0 8px; font-size: 18px; }
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--line);
+}
+.row.slider { flex-direction: column; align-items: stretch; justify-content: center; padding: 10px 0; gap: 8px; }
+.row.slider span { display: flex; justify-content: space-between; }
+.row output { color: var(--muted); font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--accent); touch-action: pan-x; }
+input[type=checkbox] {
+  appearance: none; -webkit-appearance: none;
+  width: 46px; height: 28px; flex: none;
+  border-radius: 99px;
+  background: var(--line);
+  position: relative;
+  transition: background .15s;
+}
+input[type=checkbox]::after {
+  content: ""; position: absolute; top: 3px; left: 3px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #fff;
+  transition: transform .15s;
+}
+input[type=checkbox]:checked { background: var(--accent); }
+input[type=checkbox]:checked::after { transform: translateX(18px); }
+.row.toggle span small { display: block; color: var(--muted); font-size: 12px; }
+.row.toggle { padding: 6px 0; }
+.tip { color: var(--muted); font-size: 13px; }
+.sheet-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.sheet-actions button:not(.primary) { color: var(--muted); padding: 11px 4px; }
+
+#keepawake {
+  position: fixed; right: 0; bottom: 0;
+  width: 1px; height: 1px;
+  opacity: 0.01;
+  pointer-events: none;
+}
+
+/* ---------- seletor de orientação ---------- */
+.row.orientation { flex-wrap: wrap; padding: 6px 0; }
+.segmented {
+  display: flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+.segmented button {
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.segmented button[aria-checked="true"] { background: var(--accent); color: #fff; font-weight: 600; }
+
+/* ---------- aviso rápido ---------- */
+.toast {
+  position: fixed;
+  left: 50%; top: 60px;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 13px; font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s;
+  z-index: 25;
+}
+.toast.on { opacity: 1; }
+
+/* ---------- interface deitada (paisagem) ----------
+   Classe aplicada pelo app.js, e não por media query: quando a interface é
+   girada por CSS, a tela do navegador continua "em pé". */
+.app.landscape .bar { height: 40px; }
+.app.landscape .workspace { flex-direction: row; padding-bottom: 10px; }
+.app.landscape .buttons {
+  width: 112px; height: auto;
+  grid-template-columns: 1fr; grid-template-rows: 1fr 1fr;
+  padding: 0 10px 0 0;
+}
+.app.landscape .sheet {
+  top: 0;
+  max-height: none;
+  border-radius: 0;
+  padding-top: 4px;
+}
+.app.landscape .sheet-handle { display: none; }
+.app.landscape .sheet h2 { margin-bottom: 0; }
+.app.landscape .sheet-body { columns: 3; column-gap: 24px; }
+.app.landscape .sheet-body .row { break-inside: avoid; min-height: 42px; }
+.app.landscape .row.toggle span small { display: none; }
+.app.landscape .row.slider { padding: 6px 0; }
+.app.landscape .sheet-actions { margin-top: 8px; }

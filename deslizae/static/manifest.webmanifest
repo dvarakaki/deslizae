@@ -1,0 +1,12 @@
+{
+  "name": "Deslizae — touchpad no celular",
+  "short_name": "Deslizae",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": [
+    { "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/static/icon-180.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
