@@ -285,7 +285,8 @@
       showOverlay('Não encontrei o computador',
         '• O Deslizae está aberto no PC?\n' +
         '• O celular está no mesmo Wi-Fi que o PC?\n' +
-        '• O Firewall do Windows liberou o acesso (rede privada)?',
+        '• O Firewall do Windows liberou o acesso (rede privada)?\n' +
+        '• Wi-Fi de visitantes ou corporativo? Tente o hotspot do celular.',
         { spinner: true, retry: true });
     } else {
       showOverlay('Conectando ao computador…', '', { delay: failures === 1 ? 400 : 0 });
