@@ -1,0 +1,47 @@
+name: Relatar um problema
+description: Algo não funciona como deveria
+labels: [bug]
+body:
+  - type: textarea
+    id: descricao
+    attributes:
+      label: O que aconteceu?
+      description: Descreva o problema e o que você esperava que acontecesse.
+    validations:
+      required: true
+  - type: textarea
+    id: passos
+    attributes:
+      label: Como reproduzir
+      placeholder: |
+        1. Abra o agente
+        2. Conecte o celular
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: celular
+    attributes:
+      label: Celular e navegador
+      placeholder: ex.: Android 14, Chrome 131 / iPhone 15, Safari
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Versão do Windows e do Python
+      placeholder: ex.: Windows 11 24H2, Python 3.12
+  - type: dropdown
+    id: transporte
+    attributes:
+      label: Indicador de conexão no celular
+      options:
+        - UDP
+        - TCP
+        - Não conecta
+  - type: textarea
+    id: stats
+    attributes:
+      label: Saída do agente
+      description: Se for travamento ou atraso, rode com `--stats` e cole algumas linhas. Remova o código de pareamento (`?t=...`).
+      render: text
