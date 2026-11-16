@@ -1,6 +1,6 @@
 [project]
 name = "deslizae"
-version = "0.1.0"
+version = "0.1.1"
 description = "Transforme qualquer celular em touchpad do PC com Windows, direto do navegador."
 readme = "README.md"
 license = "MIT"

@@ -5,7 +5,19 @@ Todas as mudanças relevantes deste projeto são documentadas aqui.
 O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o
 projeto adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
-## [Não lançado]
+## [0.1.1] - 2026-11-16
+
+### Adicionado
+
+- `Deslizae.exe` para Windows, que dispensa Python e terminal. É gerado
+  automaticamente a cada versão e publicado na release com o SHA-256.
+- Guia passo a passo de instalação no README e roteiro "Não conectou?" com
+  firewall, tipo de rede e redes que isolam aparelhos, também na página de pareamento.
+
+### Alterado
+
+- O `iniciar.bat` procura o Python 3.11+ (inclusive pelo lançador `py`) e, se ele
+  faltar, explica como instalar ou indica o executável.
 
 ### Corrigido
 
@@ -32,5 +44,5 @@ Primeira versão.
 - Ajustes salvos no celular: sensibilidade, aceleração, rolagem, vibração e outros.
 - Diagnóstico de rede com `--stats`.
 
-[Não lançado]: https://github.com/dvarakaki/deslizae/compare/v0.1.0...HEAD
+[0.1.1]: https://github.com/dvarakaki/deslizae/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/dvarakaki/deslizae/releases/tag/v0.1.0
