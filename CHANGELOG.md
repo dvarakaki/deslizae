@@ -24,6 +24,8 @@ projeto adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 - Encerrar o agente enquanto um celular está conectado por WebRTC podia lançar
   `CancelledError`, quando o encerramento e a desconexão fechavam a mesma conexão
   ao mesmo tempo.
+- Ao encerrar o agente no meio de um arraste, o botão podia não ser solto e o
+  celular continuava listado como conectado.
 
 ## [0.1.0] - 2026-11-16
 

@@ -235,10 +235,13 @@ class TouchpadServer:
                 elif msg.type == WSMsgType.ERROR:
                     log.debug("Erro no WebSocket: %s", ws.exception())
         finally:
-            await self._close_pc(client)
+            # Primeiro o que é síncrono e não pode ser perdido (soltar botões,
+            # tirar da lista): no encerramento esta tarefa é cancelada e o
+            # await abaixo é interrompido.
             client.session.close()
             self.clients.pop(cid, None)
             log.info("Celular desconectado: %s", addr)
+            await self._close_pc(client)
         return ws
 
     async def _control(self, client: Client, ws: web.WebSocketResponse, text: str) -> None:
