@@ -108,11 +108,7 @@ class TouchpadServer:
         Sem isso, o aiohttp espera os WebSockets abertos (até 60 s) antes de sair.
         """
         for client in list(self.clients.values()):
-            if client.pc is not None:
-                try:
-                    await asyncio.wait_for(client.pc.close(), 2)
-                except (asyncio.TimeoutError, Exception):  # noqa: BLE001
-                    pass
+            await self._close_pc(client)
             if client.ws is not None and not client.ws.closed:
                 await client.ws.close(code=WSCloseCode.GOING_AWAY, message=b"agente encerrado")
 
@@ -239,8 +235,7 @@ class TouchpadServer:
                 elif msg.type == WSMsgType.ERROR:
                     log.debug("Erro no WebSocket: %s", ws.exception())
         finally:
-            if client.pc is not None:
-                await client.pc.close()
+            await self._close_pc(client)
             client.session.close()
             self.clients.pop(cid, None)
             log.info("Celular desconectado: %s", addr)
@@ -264,10 +259,29 @@ class TouchpadServer:
             await ws.send_json({"type": "answer", "sdp": answer})
 
     # -- WebRTC -------------------------------------------------------------
+    @staticmethod
+    async def _close_pc(client: Client) -> None:
+        """Fecha a conexão WebRTC uma única vez, sem deixar erro escapar.
+
+        O encerramento (Ctrl+C) e a desconexão do celular podem fechar a mesma
+        conexão ao mesmo tempo; o aiortc então cancela um futuro interno e um
+        CancelledError vaza para quem chamou. Tirar a referência antes de
+        aguardar garante um único fechamento; o CancelledError só é repassado
+        se for a própria tarefa que está sendo cancelada.
+        """
+        pc, client.pc = client.pc, None
+        client.udp = False
+        if pc is None:
+            return
+        try:
+            await asyncio.wait_for(pc.close(), 2)
+        except (asyncio.TimeoutError, asyncio.CancelledError, Exception):  # noqa: BLE001
+            task = asyncio.current_task()
+            if task is not None and task.cancelling():
+                raise
+
     async def _rtc_answer(self, client: Client, offer_sdp: str) -> str:
-        if client.pc is not None:
-            await client.pc.close()
-            client.udp = False
+        await self._close_pc(client)
 
         # Sem servidores STUN: tudo acontece na rede local.
         pc = RTCPeerConnection(RTCConfiguration(iceServers=[]))

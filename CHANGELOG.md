@@ -5,6 +5,14 @@ Todas as mudanças relevantes deste projeto são documentadas aqui.
 O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o
 projeto adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Corrigido
+
+- Encerrar o agente enquanto um celular está conectado por WebRTC podia lançar
+  `CancelledError`, quando o encerramento e a desconexão fechavam a mesma conexão
+  ao mesmo tempo.
+
 ## [0.1.0] - 2026-11-16
 
 Primeira versão.
@@ -24,4 +32,5 @@ Primeira versão.
 - Ajustes salvos no celular: sensibilidade, aceleração, rolagem, vibração e outros.
 - Diagnóstico de rede com `--stats`.
 
+[Não lançado]: https://github.com/dvarakaki/deslizae/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/dvarakaki/deslizae/releases/tag/v0.1.0

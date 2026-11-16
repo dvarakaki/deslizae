@@ -79,6 +79,58 @@ def test_websocket_path_and_release_on_disconnect():
     run(body)
 
 
+def test_close_pc_is_single_and_swallows_internal_cancel():
+    """Encerramento e desconexão fechando a mesma conexão ao mesmo tempo."""
+    from deslizae.server import Client
+    from deslizae.session import Session
+    from deslizae.smoother import Smoother
+
+    class LeakyPeer:
+        closes = 0
+
+        async def close(self):
+            LeakyPeer.closes += 1
+            await asyncio.sleep(0)
+            raise asyncio.CancelledError  # como o aiortc faz sob corrida
+
+    async def main():
+        sm = Smoother(DryRunMouse())
+        try:
+            client = Client(id=1, addr="x", user_agent="", session=Session(1, "x", sm), pc=LeakyPeer())
+            await asyncio.gather(TouchpadServer._close_pc(client), TouchpadServer._close_pc(client))
+            assert client.pc is None and LeakyPeer.closes == 1
+        finally:
+            sm.close()
+
+    asyncio.run(main())
+
+
+@pytest.mark.skipif(not HAS_RTC, reason="aiortc não instalado")
+def test_shutdown_with_phone_still_connected_over_webrtc():
+    """Ctrl+C com o celular conectado por UDP: o agente encerra sem erro."""
+    from aiortc import RTCConfiguration, RTCPeerConnection, RTCSessionDescription
+
+    phone = None
+
+    async def body(client, mouse, server):
+        nonlocal phone
+        ws = await client.ws_connect("/ws", params={"t": TOKEN})
+        await ws.receive_json()
+        phone = RTCPeerConnection(RTCConfiguration(iceServers=[]))
+        dc = phone.createDataChannel("input", ordered=False, maxRetransmits=0)
+        opened = asyncio.Event()
+        dc.on("open", opened.set)
+        await phone.setLocalDescription(await phone.createOffer())
+        await ws.send_json({"type": "offer", "sdp": phone.localDescription.sdp})
+        answer = await ws.receive_json()
+        await phone.setRemoteDescription(RTCSessionDescription(sdp=answer["sdp"], type="answer"))
+        await asyncio.wait_for(opened.wait(), 10)
+        # Sai do contexto sem fechar nada: o servidor encerra com tudo aberto.
+
+    run(body)
+    asyncio.run(phone.close())
+
+
 @pytest.mark.skipif(not HAS_RTC, reason="aiortc não instalado")
 def test_webrtc_udp_path_end_to_end():
     """Um "celular" em Python negocia WebRTC pelo WebSocket e manda pelo UDP."""
