@@ -1,4 +1,7 @@
-"""Gera deslizae/static/icon-180.png (ícone da tela inicial do iPhone).
+"""Gera os ícones do Deslizae a partir do mesmo desenho de icon.svg.
+
+* deslizae/static/icon-180.png   ícone da tela inicial do iPhone
+* packaging/deslizae.ico         ícone do executável (16, 24, 32, 48, 64 e 256 px)
 
 Rasterizador mínimo, sem dependências, com supersampling 4x. Reproduz o
 desenho de icon.svg (viewBox 64x64).
@@ -10,9 +13,8 @@ import struct
 import zlib
 from pathlib import Path
 
-SIZE = 180
+ROOT = Path(__file__).resolve().parent.parent
 SS = 4
-SCALE = SIZE / 64
 
 BG = (0x0B, 0x0D, 0x12)
 PANEL = (0x17, 0x1B, 0x24)
@@ -44,16 +46,18 @@ def color_at(x, y):
     return c
 
 
-def render() -> bytes:
+def render(size: int) -> bytes:
+    """Pixels RGBA em linhas prefixadas pelo filtro PNG 0."""
+    scale = size / 64
     rows = bytearray()
-    for py in range(SIZE):
+    for py in range(size):
         rows.append(0)
-        for px in range(SIZE):
+        for px in range(size):
             r = g = b = a = 0
             for sy in range(SS):
                 for sx in range(SS):
-                    x = (px + (sx + 0.5) / SS) / SCALE
-                    y = (py + (sy + 0.5) / SS) / SCALE
+                    x = (px + (sx + 0.5) / SS) / scale
+                    y = (py + (sy + 0.5) / SS) / scale
                     c = color_at(x, y)
                     if c:
                         r += c[0]; g += c[1]; b += c[2]; a += 1
@@ -65,15 +69,34 @@ def render() -> bytes:
     return bytes(rows)
 
 
-def png(width: int, height: int, raw: bytes) -> bytes:
+def png(size: int) -> bytes:
     def chunk(tag: bytes, data: bytes) -> bytes:
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
 
-    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
-    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
+    ihdr = struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)
+    idat = zlib.compress(render(size), 9)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
+
+
+def ico(sizes: list[int]) -> bytes:
+    """ICO com imagens PNG embutidas (aceito pelo Windows desde o Vista)."""
+    images = [png(s) for s in sizes]
+    header = struct.pack("<HHH", 0, 1, len(images))
+    offset = 6 + 16 * len(images)
+    entries = b""
+    for size, data in zip(sizes, images):
+        dim = 0 if size >= 256 else size  # 0 significa 256 no formato ICO
+        entries += struct.pack("<BBBBHHII", dim, dim, 0, 0, 1, 32, len(data), offset)
+        offset += len(data)
+    return header + entries + b"".join(images)
+
+
+def write(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    print(f"gerado {path.relative_to(ROOT)} ({len(data)} bytes)")
 
 
 if __name__ == "__main__":
-    out = Path(__file__).resolve().parent.parent / "deslizae" / "static" / "icon-180.png"
-    out.write_bytes(png(SIZE, SIZE, render()))
-    print(f"gerado {out} ({out.stat().st_size} bytes)")
+    write(ROOT / "deslizae" / "static" / "icon-180.png", png(180))
+    write(ROOT / "packaging" / "deslizae.ico", ico([16, 24, 32, 48, 64, 256]))

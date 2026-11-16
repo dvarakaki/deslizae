@@ -34,6 +34,7 @@ Changelog = "https://github.com/dvarakaki/deslizae/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+build = ["pyinstaller>=6.10"]
 
 [project.scripts]
 deslizae = "deslizae.__main__:main"
