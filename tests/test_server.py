@@ -110,25 +110,28 @@ def test_shutdown_with_phone_still_connected_over_webrtc():
     """Ctrl+C com o celular conectado por UDP: o agente encerra sem erro."""
     from aiortc import RTCConfiguration, RTCPeerConnection, RTCSessionDescription
 
-    phone = None
-
-    async def body(client, mouse, server):
-        nonlocal phone
-        ws = await client.ws_connect("/ws", params={"t": TOKEN})
-        await ws.receive_json()
+    async def main():
+        server = TouchpadServer(Config(token=TOKEN, port=0), DryRunMouse())
         phone = RTCPeerConnection(RTCConfiguration(iceServers=[]))
-        dc = phone.createDataChannel("input", ordered=False, maxRetransmits=0)
-        opened = asyncio.Event()
-        dc.on("open", opened.set)
-        await phone.setLocalDescription(await phone.createOffer())
-        await ws.send_json({"type": "offer", "sdp": phone.localDescription.sdp})
-        answer = await ws.receive_json()
-        await phone.setRemoteDescription(RTCSessionDescription(sdp=answer["sdp"], type="answer"))
-        await asyncio.wait_for(opened.wait(), 10)
-        # Sai do contexto sem fechar nada: o servidor encerra com tudo aberto.
+        try:
+            async with TestClient(TestServer(server.app)) as client:
+                ws = await client.ws_connect("/ws", params={"t": TOKEN})
+                await ws.receive_json()
+                dc = phone.createDataChannel("input", ordered=False, maxRetransmits=0)
+                opened = asyncio.Event()
+                dc.on("open", opened.set)
+                await phone.setLocalDescription(await phone.createOffer())
+                await ws.send_json({"type": "offer", "sdp": phone.localDescription.sdp})
+                answer = await ws.receive_json()
+                await phone.setRemoteDescription(RTCSessionDescription(sdp=answer["sdp"], type="answer"))
+                await asyncio.wait_for(opened.wait(), 10)
+                # Sai do contexto sem fechar nada: o servidor encerra com tudo aberto.
+            assert not server.clients
+        finally:
+            # O celular é fechado no mesmo loop em que foi criado.
+            await phone.close()
 
-    run(body)
-    asyncio.run(phone.close())
+    asyncio.run(main())
 
 
 @pytest.mark.skipif(not HAS_RTC, reason="aiortc não instalado")
