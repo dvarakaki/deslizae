@@ -33,17 +33,6 @@
     pinchZoom: true,
   };
 
-  const TAP_MAX_MS = 250;        // duração máxima de um toque (1 dedo)
-  const MULTI_TAP_MAX_MS = 320;  // idem para 2–3 dedos (raramente encostam juntos)
-  const TAP_SLOP = 10;           // px que o dedo pode andar e ainda contar como toque
-  const MOVE_DEADZONE = 3;       // segura o início do movimento para cliques não "escorregarem"
-  const LONG_PRESS_MS = 450;     // segurar parado = começar a arrastar
-  const SCROLL_UNITS_PER_PX = 1.2; // 120 unidades de roda ≈ 100 px no Windows
-  const INERTIA_TAU_MS = 325;    // constante de desaceleração (parecida com iOS)
-  const VELOCITY_WINDOW_MS = 80; // janela para medir a velocidade ao soltar a rolagem
-  const DOUBLE_TAP_MS = 200;     // espera por um 2º toque (toque duplo e arrastar)
-  const PINCH_START_PX = 24;     // variação da distância entre os dedos para virar pinça
-  const ZOOM_UNITS_PER_LN = 520; // 120 × 3 / ln 2: dobrar a distância = 3 passos de zoom
   const PING_INTERVAL_MS = 1000;
   const MAX_BUFFERED = 512;      // bytes na fila do socket antes de passar a agrupar
 
@@ -441,20 +430,7 @@
     if (ui.video.paused) ui.video.play().catch(() => {});
   }
 
-  // -------------------------------------------------- curva de aceleração
-  // Dedo devagar = precisão; dedo rápido = cursor atravessa a tela.
-  // v em px CSS por ms. Transição suave (smoothstep) entre 0.05 e 1.2 px/ms.
-  function gain(v) {
-    const t = Math.min(1, Math.max(0, (v - 0.05) / (1.2 - 0.05)));
-    const smooth = t * t * (3 - 2 * t);
-    return settings.sensitivity * (1 + settings.acceleration * 3 * smooth);
-  }
-
   // ------------------------------------------------------- motor de gestos
-  const active = new Map(); // pointerId -> {x, y, sx, sy}
-  let g = null;             // gesto em andamento
-  let longTimer = 0;
-  let inertiaRaf = 0;
   let surfaceOrigin = { x: 0, y: 0 };
   let hintHidden = store.get('hintSeen') === '1';
   if (hintHidden) ui.hint.classList.add('hidden');
@@ -505,7 +481,7 @@
     Object.assign(orient, { rot, W, H });
     app.classList.toggle('rotated', rot !== 0);
     app.classList.toggle('landscape', rot === 0 ? windowLandscape : !windowLandscape);
-    if (changed && active.size) resetInput(); // gesto no meio da troca: descarta
+    if (changed && gestures.activeCount) resetInput(); // gesto no meio da troca: descarta
     requestAnimationFrame(refreshRect);
   }
 
@@ -551,15 +527,9 @@
   window.addEventListener('orientationchange', () => setTimeout(applyOrientation, 300));
   if (screen.orientation) screen.orientation.addEventListener('change', applyOrientation);
 
-  function centroid() {
-    let x = 0, y = 0, n = 0;
-    for (const p of active.values()) { x += p.x; y += p.y; if (++n === 2) break; }
-    return { x: x / n, y: y / n };
-  }
-
-  function updateDots() {
+  function updateDots(points) {
     let i = 0;
-    for (const p of active.values()) {
+    for (const p of points) {
       if (i >= ui.dots.length) break;
       const d = ui.dots[i++];
       d.style.transform = `translate(${p.x - surfaceOrigin.x}px, ${p.y - surfaceOrigin.y}px)`;
@@ -573,42 +543,6 @@
     ui.dragBadge.hidden = !on;
   }
 
-  function clearLongPress() { clearTimeout(longTimer); longTimer = 0; }
-
-  function startLongPress() {
-    clearLongPress();
-    longTimer = setTimeout(() => {
-      longTimer = 0;
-      if (g && g.mode === 'pointer' && active.size === 1 && g.travel < TAP_SLOP) {
-        g.hold.x = g.hold.y = 0;
-        beginDrag(g, 25);
-      }
-    }, LONG_PRESS_MS);
-  }
-
-  function stopInertia() {
-    if (inertiaRaf) cancelAnimationFrame(inertiaRaf);
-    inertiaRaf = 0;
-  }
-
-  function startInertia(vx, vy) {
-    if (Math.hypot(vx, vy) < 0.25) return; // unidades de roda por ms
-    let last = null;
-    const step = (now) => {
-      // O timestamp do 1º quadro pode ser anterior ao início da inércia;
-      // por isso o relógio começa no próprio quadro e dt nunca é negativo.
-      const dt = last === null ? 16 : Math.min(50, Math.max(0, now - last));
-      last = now;
-      queueScroll(vx * dt, vy * dt, now);
-      const decay = Math.exp(-dt / INERTIA_TAU_MS);
-      vx *= decay;
-      vy *= decay;
-      if (Math.hypot(vx, vy) < 0.02 || !wsOpen) { inertiaRaf = 0; return; }
-      inertiaRaf = requestAnimationFrame(step);
-    };
-    inertiaRaf = requestAnimationFrame(step);
-  }
-
   function hideHint() {
     if (hintHidden) return;
     hintHidden = true;
@@ -616,216 +550,22 @@
     store.set('hintSeen', '1');
   }
 
-  function fingerDist() {
-    const it = active.values();
-    const a = it.next().value;
-    const b = it.next().value;
-    return a && b ? Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)) : 1;
-  }
-
-  // Toque duplo e arrastar: depois de um toque, esperamos DOUBLE_TAP_MS para
-  // ver se o dedo volta. Se voltar e andar, vira arraste (botão apertado) sem
-  // nenhum clique antes — senão o Windows veria "clique + apertar" como
-  // clique duplo e abriria o arquivo em vez de arrastá-lo.
-  let pendingTap = null;
-
-  function cancelPendingTap() {
-    if (pendingTap) { clearTimeout(pendingTap); pendingTap = null; }
-  }
-
-  /** O 2º toque não virou arraste: entrega o clique que estava guardado. */
-  function releaseTapDrag(gesture) {
-    if (gesture && gesture.tapDrag) {
-      gesture.tapDrag = false;
-      sendClick(BTN.LEFT);
-    }
-  }
-
-  function beginDrag(gesture, strength) {
-    gesture.tapDrag = false;
-    gesture.mode = 'drag';
-    gesture.moving = true;
-    sendButton(BTN.LEFT, true);
-    setDragging(true);
-    haptic(strength);
-  }
-
-  ui.surface.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    try { ui.surface.setPointerCapture(e.pointerId); } catch { /* ignora */ }
-    keepAwake();
-    stopInertia();
-    if (active.size === 0) refreshRect();
-
-    const pt = toUi(e);
-    active.set(e.pointerId, { x: pt.x, y: pt.y, sx: pt.x, sy: pt.y });
-    if (!g) {
-      g = {
-        mode: 'pointer', primary: e.pointerId, t0: e.timeStamp, maxCount: 0, travel: 0,
-        lastT: e.timeStamp, vel: 0, moving: false, hold: { x: 0, y: 0 },
-        c: null, c0: null, d0: 1, lastD: 1, samples: [], lastScrollT: 0,
-        tapDrag: false,
-      };
-      if (pendingTap) { cancelPendingTap(); g.tapDrag = true; } // 2º toque: talvez arraste
-    }
-    g.maxCount = Math.max(g.maxCount, active.size);
-
-    if (active.size === 1 && g.mode === 'pointer') startLongPress();
-    else clearLongPress();
-
-    if (g.mode === 'drag') {
-      // dedos extras durante o arraste são ignorados
-    } else if (active.size === 2) {
-      releaseTapDrag(g);
-      if (g.mode === 'pointer') {
-        // Ainda não se sabe se é rolagem ou pinça: decide pelo 1º movimento.
-        g.mode = 'two';
-        g.c0 = centroid();
-      }
-      g.c = centroid();
-      g.d0 = g.lastD = fingerDist();
-      g.lastT = e.timeStamp;
-    } else if (active.size >= 3) {
-      releaseTapDrag(g);
-      g.mode = 'multi';
-    }
-    updateDots();
+  // Motor de gestos compartilhado com o modo mouse (gestures.js).
+  const gestures = window.DeslizaeGestures.create(ui.surface, {
+    settings: () => settings,
+    toUi,
+    move: queueMove,
+    scroll: queueScroll,
+    zoom: queueZoom,
+    button: sendButton,
+    click: sendClick,
+    haptic,
+    canInertia: () => wsOpen,
+    onPointerDown: (_e, count) => { keepAwake(); if (count === 0) refreshRect(); },
+    onUsed: hideHint,
+    onDrag: setDragging,
+    onTouches: updateDots,
   });
-
-  ui.surface.addEventListener('pointermove', (e) => {
-    const p = active.get(e.pointerId);
-    if (!p || !g) return;
-    const pt = toUi(e);
-    const dx = pt.x - p.x;
-    const dy = pt.y - p.y;
-    if (!dx && !dy) return;
-    p.x = pt.x;
-    p.y = pt.y;
-
-    const fromStart = Math.hypot(p.x - p.sx, p.y - p.sy);
-    if (fromStart > g.travel) g.travel = fromStart;
-    if (g.travel > TAP_SLOP) clearLongPress();
-
-    if (g.mode === 'pointer' || g.mode === 'drag') {
-      if (e.pointerId !== g.primary) return;
-      const dt = Math.max(1, e.timeStamp - g.lastT);
-      g.lastT = e.timeStamp;
-      g.vel = g.vel * 0.5 + (Math.hypot(dx, dy) / dt) * 0.5;
-      const k = gain(g.vel);
-      if (!g.moving) {
-        g.hold.x += dx;
-        g.hold.y += dy;
-        if (g.travel < MOVE_DEADZONE) return;
-        if (g.tapDrag) beginDrag(g, 15); // toque duplo + arrastar
-        g.moving = true;
-        hideHint();
-        queueMove(g.hold.x * k, g.hold.y * k, e.timeStamp);
-      } else {
-        queueMove(dx * k, dy * k, e.timeStamp);
-      }
-    } else if (g.mode === 'two' || g.mode === 'scroll' || g.mode === 'pinch') {
-      if (active.size < 2) { updateDots(); return; }
-      const c = centroid();
-      const d = fingerDist();
-
-      if (g.mode === 'two') {
-        const moved = Math.hypot(c.x - g.c0.x, c.y - g.c0.y);
-        const spread = Math.abs(d - g.d0);
-        if (settings.pinchZoom && spread > PINCH_START_PX && spread > moved * 1.2) {
-          g.mode = 'pinch';
-          g.lastD = d;
-          hideHint();
-        } else if (moved > TAP_SLOP * 0.6) {
-          g.mode = 'scroll';
-          g.c = c;
-          hideHint();
-        }
-        updateDots();
-        return;
-      }
-
-      if (g.mode === 'pinch') {
-        // Escala logarítmica: abrir até o dobro da distância = 3 passos de zoom.
-        queueZoom(Math.log(d / g.lastD) * ZOOM_UNITS_PER_LN, e.timeStamp);
-        g.lastD = d;
-      } else {
-        const cdx = c.x - g.c.x;
-        const cdy = c.y - g.c.y;
-        g.c = c;
-        const k = SCROLL_UNITS_PER_PX * settings.scrollSpeed * (settings.naturalScroll ? 1 : -1);
-        const wx = -cdx * k; // roda horizontal: positivo = direita
-        const wy = cdy * k;  // roda vertical: positivo = para cima
-        // Guarda amostras para estimar a velocidade numa janela de tempo: os
-        // eventos dos dois dedos chegam quase juntos e um dt instantâneo
-        // inflaria a velocidade da inércia.
-        g.samples.push({ t: e.timeStamp, x: wx, y: wy });
-        while (g.samples.length && e.timeStamp - g.samples[0].t > VELOCITY_WINDOW_MS) g.samples.shift();
-        g.lastScrollT = e.timeStamp;
-        queueScroll(wx, wy, e.timeStamp);
-      }
-    }
-    updateDots();
-  });
-
-  function onPointerEnd(e, cancelled) {
-    if (!active.has(e.pointerId)) return;
-    active.delete(e.pointerId);
-    if (!g) { updateDots(); return; }
-
-    if (active.size > 0) {
-      // Um dedo saiu, outro continua: recalcula referências sem dar "pulo".
-      if (g.mode === 'scroll' || g.mode === 'two') g.c = centroid();
-      if (e.pointerId === g.primary) g.primary = active.keys().next().value;
-      updateDots();
-      return;
-    }
-
-    clearLongPress();
-    const gesture = g;
-    g = null;
-    const duration = e.timeStamp - gesture.t0;
-    const maxTap = gesture.maxCount > 1 ? MULTI_TAP_MAX_MS : TAP_MAX_MS;
-    const isTap = !cancelled && settings.tapToClick && duration < maxTap && gesture.travel < TAP_SLOP;
-
-    if (gesture.mode === 'drag') {
-      sendButton(BTN.LEFT, false);
-      setDragging(false);
-    } else if (isTap && gesture.maxCount === 1) {
-      haptic(8);
-      hideHint();
-      if (gesture.tapDrag) {
-        // Dois toques rápidos = clique duplo.
-        gesture.tapDrag = false;
-        sendClick(BTN.LEFT);
-        sendClick(BTN.LEFT);
-      } else if (settings.tapDrag) {
-        pendingTap = setTimeout(() => { pendingTap = null; sendClick(BTN.LEFT); }, DOUBLE_TAP_MS);
-      } else {
-        sendClick(BTN.LEFT);
-      }
-    } else if (isTap) {
-      sendClick(gesture.maxCount === 2 ? BTN.RIGHT : BTN.MIDDLE);
-      haptic(8);
-      hideHint();
-    } else {
-      if (!cancelled) releaseTapDrag(gesture);
-      if (gesture.mode === 'scroll' && settings.inertia && !cancelled &&
-          e.timeStamp - gesture.lastScrollT < 60) {
-        const recent = gesture.samples.filter((s) => e.timeStamp - s.t <= VELOCITY_WINDOW_MS);
-        if (recent.length >= 2) {
-          // A primeira amostra marca o início da janela; seu delta veio antes dela.
-          const span = Math.max(16, e.timeStamp - recent[0].t);
-          let sx = 0, sy = 0;
-          for (const s of recent.slice(1)) { sx += s.x; sy += s.y; }
-          startInertia(sx / span, sy / span);
-        }
-      }
-    }
-    updateDots();
-  }
-
-  ui.surface.addEventListener('pointerup', (e) => onPointerEnd(e, false));
-  ui.surface.addEventListener('pointercancel', (e) => onPointerEnd(e, true));
 
   // ------------------------------------------------------ botões de baixo
   const buttonEls = $$('.mbtn');
@@ -855,16 +595,11 @@
 
   /** Solta tudo (conexão caiu ou página foi para segundo plano). */
   function resetInput() {
-    clearLongPress();
-    cancelPendingTap();
-    stopInertia();
+    gestures.reset();
     if (wsOpen) for (const b of Array.from(held)) sendButton(b, false);
     held.clear();
-    active.clear();
-    g = null;
     setDragging(false);
     for (const el of buttonEls) el._reset();
-    updateDots();
   }
 
   // --------------------------------------------------------------- ajustes
