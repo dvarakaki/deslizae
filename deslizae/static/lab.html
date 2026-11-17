@@ -5,81 +5,85 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#0b0d12">
   <meta name="color-scheme" content="dark">
-  <title>Deslizae · Laboratório</title>
+  <title>Deslizae · Mouse</title>
   <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/lab.css">
 </head>
 <body>
-  <div class="app lab" id="app">
-    <header class="bar">
-      <div class="conn">
-        <span class="dot" id="dot" aria-hidden="true"></span>
-        <span class="host" id="host">Conectando…</span>
-      </div>
-      <span class="badge-lab">LAB</span>
-      <span class="transport" id="transport"></span>
-      <span class="latency" id="latency"></span>
-    </header>
-
-    <main class="lab-main">
-      <section class="lab-view">
-        <div class="preview-wrap" id="preview-wrap">
-          <canvas id="preview" width="148" height="148" aria-label="Imagem analisada da câmera"></canvas>
-          <span class="state-chip" id="state">—</span>
+  <!-- O celular é o mouse: em pé, topo apontando para longe de você.
+       Em cima ficam os botões (onde os dedos ficam num mouse); embaixo, a palma. -->
+  <div class="app mouse" id="app">
+    <section class="top">
+      <button class="key left" data-button="0" aria-label="Botão esquerdo"></button>
+      <div class="middle">
+        <div class="cam-zone" aria-label="Câmera: não cubra">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="8.5"/></svg>
         </div>
+        <div class="wheel" id="wheel" aria-label="Rodinha: arraste para rolar"></div>
+      </div>
+      <button class="key right" data-button="1" aria-label="Botão direito"></button>
+    </section>
+
+    <section class="palm">
+      <div class="brand"><img src="/static/icon.svg" alt=""> Deslizae</div>
+      <span class="status-dot" id="dot" title="Estado"></span>
+      <button class="gear" id="btn-settings" aria-label="Ajustes">
+        <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+      </button>
+    </section>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <!-- Ajustes (inclui o diagnóstico, fora da tela principal) -->
+    <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
+    <section class="sheet" id="sheet" aria-label="Ajustes" hidden>
+      <div class="sheet-handle"></div>
+      <h2>Ajustes do mouse</h2>
+      <p class="calib-summary" id="calib-summary">Não calibrado.</p>
+      <div class="sheet-buttons">
+        <button class="primary" id="btn-calibrate">Calibrar</button>
+        <button id="btn-recenter">Recentrar</button>
+      </div>
+
+      <label class="row slider"><span>Sensibilidade <output id="out-sens"></output></span><input type="range" id="sens" min="2" max="120" step="1"></label>
+      <label class="row slider"><span>Aceleração <output id="out-accel"></output></span><input type="range" id="accel" min="0" max="3" step="0.1"></label>
+      <label class="row slider"><span>Suavidade <output id="out-smooth"></output></span><input type="range" id="smooth" min="0.3" max="5" step="0.1"></label>
+      <label class="row toggle"><span>Compensar inclinação</span><input type="checkbox" id="gyroComp"></label>
+      <label class="row toggle"><span>Anticintilação<small>Ignora faixas de lâmpadas LED/fluorescentes</small></span><input type="checkbox" id="rowNormalize"></label>
+      <label class="row toggle"><span>Travar exposição</span><input type="checkbox" id="lockExposure"></label>
+      <label class="row toggle"><span>Campo amplo<small>Vê mais do teto; menos preciso</small></span><input type="checkbox" id="wide"></label>
+      <label class="row toggle"><span>Suavização no PC (240 Hz)</span><input type="checkbox" id="smoothing"></label>
+
+      <details>
+        <summary>Diagnóstico</summary>
         <div class="metrics">
           <div><span>Câmera</span><b id="m-fps">–</b></div>
+          <div><span>Resolução</span><b id="m-res">–</b></div>
           <div><span>Processamento</span><b id="m-proc">–</b></div>
           <div><span>Latência câmera</span><b id="m-lat">–</b></div>
-          <div><span>Qualidade (PSR)</span><b id="m-psr">–</b></div>
-          <div class="bar-meter"><i id="m-psr-bar"></i></div>
+          <div><span>Qualidade do alinhamento</span><b id="m-res2">–</b></div>
           <div><span>Tremor parado</span><b id="m-jitter">–</b></div>
           <div><span>Giroscópio</span><b id="m-gyro">–</b></div>
           <div><span>Exposição</span><b id="m-exp">–</b></div>
+          <div><span>Orientação da tela</span><b id="m-orient">–</b></div>
+          <div><span>Estado</span><b id="m-state">–</b></div>
+          <div><span>Rede</span><b id="m-net">–</b></div>
         </div>
-      </section>
+      </details>
+      <details>
+        <summary>Avançado</summary>
+        <label class="row slider"><span>Limiar de movimento (px) <output id="out-startPx"></output></span><input type="range" id="startPx" min="0.1" max="3" step="0.05"></label>
+        <label class="row slider"><span>Sincronia do giroscópio (ms) <output id="out-gyroDelay"></output></span><input type="range" id="gyroDelay" min="-100" max="150" step="5"></label>
+        <label class="row toggle"><span>Inverter X (manual)</span><input type="checkbox" id="invX"></label>
+        <label class="row toggle"><span>Inverter Y (manual)</span><input type="checkbox" id="invY"></label>
+        <label class="row toggle"><span>Trocar eixos (manual)</span><input type="checkbox" id="swap"></label>
+        <div class="sheet-buttons"><button id="btn-forget">Apagar calibração</button></div>
+      </details>
+      <div class="sheet-actions"><span></span><button class="primary" id="btn-close">Pronto</button></div>
+    </section>
 
-      <section class="lab-controls">
-        <p class="calib-summary" id="calib-summary">Não calibrado.</p>
-        <div class="lab-actions">
-          <button class="primary" id="btn-calibrate">Calibrar (assistente)</button>
-          <button id="btn-recenter" title="Recomeça o rastreio a partir da imagem atual">Recentrar</button>
-        </div>
-        <label class="row toggle send"><span>Enviar ao cursor<small>Ligue depois de calibrar</small></span><input type="checkbox" id="send"></label>
-        <p class="lab-status" id="status">Toque em “Iniciar” para abrir a câmera frontal.</p>
-
-        <details>
-          <summary>Ajustes</summary>
-          <label class="row slider"><span>Sensibilidade <output id="out-sens"></output></span><input type="range" id="sens" min="2" max="120" step="1"></label>
-          <label class="row slider"><span>Aceleração <output id="out-accel"></output></span><input type="range" id="accel" min="0" max="3" step="0.1"></label>
-          <label class="row slider"><span>Suavidade <output id="out-smooth"></output></span><input type="range" id="smooth" min="0.2" max="4" step="0.1"></label>
-          <label class="row toggle"><span>Anticintilação<small>Ignora as faixas de lâmpadas LED/fluorescentes</small></span><input type="checkbox" id="rowNormalize"></label>
-          <label class="row toggle"><span>Travar exposição<small>Evita variações automáticas de brilho</small></span><input type="checkbox" id="lockExposure"></label>
-          <label class="row toggle"><span>Campo amplo<small>Vê mais do teto; menos preciso</small></span><input type="checkbox" id="wide"></label>
-          <label class="row toggle"><span>Alta precisão (256 px)<small>Mais pesado para o celular</small></span><input type="checkbox" id="hiRes"></label>
-          <label class="row toggle"><span>Compensar inclinação</span><input type="checkbox" id="gyroComp"></label>
-          <label class="row toggle"><span>Suavização no PC (240 Hz)</span><input type="checkbox" id="smoothing"></label>
-        </details>
-        <details>
-          <summary>Avançado</summary>
-          <label class="row slider"><span>Limiar de movimento (px) <output id="out-startPx"></output></span><input type="range" id="startPx" min="0.1" max="3" step="0.05"></label>
-          <label class="row slider"><span>Qualidade mínima (PSR) <output id="out-minPsr"></output></span><input type="range" id="minPsr" min="3" max="20" step="0.5"></label>
-          <label class="row slider"><span>Sincronia do giroscópio (ms) <output id="out-gyroDelay"></output></span><input type="range" id="gyroDelay" min="-100" max="150" step="5"></label>
-          <label class="row toggle"><span>Inverter X (manual)</span><input type="checkbox" id="invX"></label>
-          <label class="row toggle"><span>Inverter Y (manual)</span><input type="checkbox" id="invY"></label>
-          <label class="row toggle"><span>Trocar eixos (manual)</span><input type="checkbox" id="swap"></label>
-          <div class="lab-actions"><button id="btn-forget">Apagar calibração</button></div>
-        </details>
-      </section>
-    </main>
-
-    <footer class="mouse-buttons">
-      <button class="mbtn" data-button="0" aria-label="Botão esquerdo">E</button>
-      <div class="wheel" id="wheel" aria-label="Rodinha: arraste para rolar"><span>⇅</span></div>
-      <button class="mbtn" data-button="1" aria-label="Botão direito">D</button>
-    </footer>
-
+    <!-- Assistente de calibração -->
     <div class="overlay hidden" id="wizard" role="dialog" aria-labelledby="wiz-title">
       <div class="overlay-card wizard">
         <p class="wiz-step" id="wiz-step"></p>
@@ -93,13 +97,13 @@
 
     <div class="overlay" id="intro">
       <div class="overlay-card">
-        <h2>Mouse pela câmera</h2>
-        <p>Deite o celular na mesa com a <b>tela para cima</b> e o <b>topo apontando para longe de você</b>,
-          como a frente de um mouse. A câmera frontal acompanha o teto.</p>
-        <p>Segure pela parte de baixo, <b>sem cobrir a câmera</b>.</p>
-        <p class="small">Funciona melhor com luminárias, cantos ou textura no campo de visão.
-          Teto liso e ventilador girando atrapalham.</p>
-        <button class="primary" id="btn-start">Iniciar</button>
+        <h2>Celular como mouse</h2>
+        <p>Deite o celular na mesa, <b>tela para cima</b>, com o <b>topo apontando para longe de você</b>.</p>
+        <p>Os <b>botões ficam em cima</b>, como num mouse; apoie a palma na parte de baixo.
+          <b>Não cubra a câmera</b> (o círculo no centro, no topo).</p>
+        <p class="small">A câmera frontal acompanha o teto. Luminárias, cantos ou textura ajudam;
+          teto liso e ventilador girando atrapalham.</p>
+        <button class="primary" id="btn-start">Começar</button>
       </div>
     </div>
   </div>
