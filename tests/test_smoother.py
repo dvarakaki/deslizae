@@ -46,6 +46,35 @@ def test_clock_shrinks_buffer_on_clean_network():
     assert clock.buffer == pytest.approx(MIN_BUFFER, abs=0.002)
 
 
+def test_buffer_covers_slow_sources_like_a_30fps_camera():
+    """Sem rede oscilando, uma fonte a 30 Hz precisa de buffer ≥ 33 ms."""
+    clock = NetworkClock()
+    for i in range(200):
+        t = i / 30
+        clock.playout(t, t + 0.004)
+    assert clock.interval == pytest.approx(1 / 30, rel=0.01)
+    assert clock.buffer >= (1 / 30) * 1.1
+
+
+def test_30hz_source_renders_smoothly_at_240hz():
+    """Câmera a 30 Hz: cada quadro de 240 Hz precisa andar, sem degraus."""
+    clock = NetworkClock()
+    got = []
+    ch = _Channel(lambda dx, dy: got.append(dx))
+    # 3 s de movimento constante (3 px por amostra), chegando com 4 ms de rede.
+    for i in range(90):
+        t = i / 30
+        ch.push(clock.playout(t, t + 0.004), 3.0, 0.0, clock.interval)
+    steps = []
+    for k in range(240):  # 1 s (de 1 s a 2 s, já com o buffer adaptado) a 240 Hz
+        before = len(got)
+        ch.render(1.0 + k / 240)
+        steps.append(sum(got[before:]))
+    moving = steps[10:-10]
+    assert min(moving) > 0.2, f"quadro parado no meio do movimento: {min(moving):.3f} px"
+    assert max(moving) < 0.6, f"salto de {max(moving):.3f} px (esperado ~0,375)"
+
+
 def test_channel_interpolates_and_conserves_total():
     got = []
     ch = _Channel(lambda dx, dy: got.append((dx, dy)))

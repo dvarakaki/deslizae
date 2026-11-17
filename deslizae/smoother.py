@@ -29,25 +29,51 @@ import time
 from collections import deque
 from typing import Callable, Hashable
 
-MIN_BUFFER = 0.010   # s — precisa cobrir ao menos um intervalo entre toques
-MAX_BUFFER = 0.060   # s — acima disso o atraso começa a incomodar
+MIN_BUFFER = 0.010   # s — piso do buffer
+MAX_BUFFER = 0.090   # s — acima disso o atraso começa a incomodar
 INITIAL_BUFFER = 0.020
 WINDOW = 2.0         # s de histórico para estimar a rede
 QUANTILE = 0.90
 RATE_HZ = 240
+INTERVAL_MARGIN = 1.15  # o buffer cobre o intervalo entre amostras com folga
+GAP = 0.25              # intervalos maiores que isto são pausas, não o ritmo da fonte
 
 
 class NetworkClock:
-    """Converte o instante do celular em instante de reprodução no PC."""
+    """Converte o instante do celular em instante de reprodução no PC.
+
+    O buffer precisa cobrir duas coisas: a oscilação da rede e o **intervalo
+    entre amostras da fonte**. A interpolação a 240 Hz só funciona se a
+    próxima amostra já tiver chegado; com o touchpad (amostra a cada 8–16 ms)
+    a rede dominava, mas a câmera manda uma a cada ~33 ms, e um buffer menor
+    que isso deixa o cursor parado esperando e depois pulando (degraus de 30
+    Hz). Por isso o alvo é o maior entre o percentil da rede e o intervalo
+    típico da fonte.
+    """
 
     def __init__(self) -> None:
         self._mins: deque[tuple[float, float]] = deque()   # mínimo deslizante monotônico
         self._delays: deque[tuple[float, float]] = deque()  # (chegada, d) para o percentil
+        self._intervals: deque[float] = deque(maxlen=64)    # ritmo da fonte (s)
+        self._last_phone: float | None = None
         self._n = 0
         self.buffer = INITIAL_BUFFER
         self.late = 0  # pacotes que chegaram depois da hora de reproduzir
 
+    @property
+    def interval(self) -> float:
+        """Intervalo típico (mediana) entre amostras da fonte, em segundos."""
+        if not self._intervals:
+            return 0.008
+        s = sorted(self._intervals)
+        return s[len(s) // 2]
+
     def playout(self, t_phone: float, arrival: float) -> float:
+        if self._last_phone is not None:
+            gap = t_phone - self._last_phone
+            if 0 < gap < GAP:
+                self._intervals.append(gap)
+        self._last_phone = t_phone
         d = arrival - t_phone
 
         # Mínimo deslizante em O(1) amortizado.
@@ -65,7 +91,7 @@ class NetworkClock:
         self._n += 1
         if self._n % 8 == 0 and len(self._delays) >= 16:
             excess = sorted(x - base for _, x in self._delays)
-            target = excess[int(QUANTILE * (len(excess) - 1))]
+            target = max(excess[int(QUANTILE * (len(excess) - 1))], self.interval * INTERVAL_MARGIN)
             target = min(MAX_BUFFER, max(MIN_BUFFER, target))
             # Sobe rápido (para parar de engasgar), desce devagar (sem oscilar).
             alpha = 0.5 if target > self.buffer else 0.05
@@ -93,11 +119,12 @@ class _Channel:
     def busy(self) -> bool:
         return bool(self._points)
 
-    def push(self, tp: float, dx: float, dy: float) -> None:
+    def push(self, tp: float, dx: float, dy: float, interval: float = 0.008) -> None:
         if not self._points:
-            if self._prev is None or self._prev[0] < tp - self.IDLE_GAP:
-                # Começo de gesto: parte de onde o cursor está, um intervalo antes.
-                self._prev = (tp - 0.008, self._ex, self._ey)
+            if self._prev is None or self._prev[0] < tp - max(self.IDLE_GAP, 2.5 * interval):
+                # Começo de gesto: parte de onde o cursor está, um intervalo da
+                # fonte antes (o delta desta amostra se acumulou nesse tempo).
+                self._prev = (tp - interval, self._ex, self._ey)
         else:
             tp = max(tp, self._points[-1][0])  # nunca voltar no tempo
         self._cx += dx
@@ -160,7 +187,7 @@ class Smoother:
             clock = self._clocks.get(source)
             if clock is None:
                 clock = self._clocks[source] = NetworkClock()
-            ch.push(clock.playout(t_ms / 1000.0, arrival), dx, dy)
+            ch.push(clock.playout(t_ms / 1000.0, arrival), dx, dy, clock.interval)
             self._cond.notify()
 
     def immediate(self, fn: Callable[[], None]) -> None:
