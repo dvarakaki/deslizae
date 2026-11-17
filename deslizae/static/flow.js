@@ -264,6 +264,169 @@
     return { n, push, reset };
   }
 
+  /**
+   * Rastreador rápido para 120 Hz: Lucas-Kanade inverso-composicional
+   * (Baker e Matthews, 2004) contra um quadro de referência.
+   *
+   * A 120 Hz o deslocamento entre quadros é pequeno (frações de pixel a
+   * poucos pixels), o regime ideal do Lucas-Kanade: ele alinha a imagem atual
+   * à referência por mínimos quadrados, partindo da posição prevista, em
+   * O(n²) por iteração, bem mais barato que FFTs, e com precisão melhor que a
+   * correlação de fase. A forma inversa-composicional calcula gradientes e a
+   * matriz normal só uma vez por referência.
+   *
+   * A correlação de fase entra como reserva quando o Lucas-Kanade não converge
+   * (movimento brusco, troca de cena), e a referência é trocada a cada
+   * `rekeyPx` de deslocamento, como no rastreador por fase.
+   *
+   * push(gray) → { x, y, valid, rekeyed, residual, contrast, method }
+   *   residual: erro RMS normalizado do alinhamento (0 = perfeito; ~1,4 =
+   *   imagens sem relação). Serve de medida de confiança.
+   */
+  function createLKTracker(n, { rekeyPx = 8, rowNormalize = true, maxResidual = 0.55, maxIter = 6 } = {}) {
+    const size = n * n;
+    const margin = Math.ceil(rekeyPx) + 4;
+    const lo = margin, hi = n - 1 - margin;
+    const pc = createPhaseCorrelator(n, { rowNormalize: false });
+
+    let T = null;            // referência pré-processada
+    let gx = null, gy = null;
+    let hinv = null;         // inversa da matriz normal 2×2
+    let keyPos = { x: 0, y: 0 };
+    let p = { x: 0, y: 0 };  // deslocamento atual em relação à referência
+    let v = { x: 0, y: 0 };  // último deslocamento por quadro (previsão)
+    let last = { x: 0, y: 0 };
+
+    /** Normaliza linhas (anticintilação), tira a média e escala para desvio 1. */
+    function preprocess(gray) {
+      const out = new Float32Array(size);
+      let mean = 0;
+      for (let i = 0; i < size; i++) mean += gray[i];
+      mean /= size;
+      if (rowNormalize) {
+        for (let y = 0; y < n; y++) {
+          let rm = 0;
+          for (let x = 0; x < n; x++) rm += gray[y * n + x];
+          rm = Math.max(1, rm / n);
+          for (let x = 0; x < n; x++) out[y * n + x] = gray[y * n + x] / rm - 1;
+        }
+      } else {
+        for (let i = 0; i < size; i++) out[i] = gray[i] - mean;
+      }
+      let m2 = 0, s2 = 0;
+      for (let i = 0; i < size; i++) m2 += out[i];
+      m2 /= size;
+      for (let i = 0; i < size; i++) { out[i] -= m2; s2 += out[i] * out[i]; }
+      const std = Math.sqrt(s2 / size);
+      const contrast = rowNormalize ? std * mean : std;
+      const k = std > 1e-9 ? 1 / std : 0;
+      for (let i = 0; i < size; i++) out[i] *= k;
+      return { img: out, contrast };
+    }
+
+    function setKey(img, pos) {
+      T = img;
+      gx = new Float32Array(size);
+      gy = new Float32Array(size);
+      let a = 0, b = 0, c = 0;
+      for (let y = lo; y <= hi; y++) {
+        for (let x = lo; x <= hi; x++) {
+          const i = y * n + x;
+          const dx = (T[i + 1] - T[i - 1]) * 0.5;
+          const dy = (T[i + n] - T[i - n]) * 0.5;
+          gx[i] = dx; gy[i] = dy;
+          a += dx * dx; b += dx * dy; c += dy * dy;
+        }
+      }
+      const det = a * c - b * b;
+      hinv = det > 1e-9 ? [c / det, -b / det, -b / det, a / det] : null;
+      keyPos = { x: pos.x, y: pos.y };
+      p = { x: 0, y: 0 };
+    }
+
+    /** Amostra bilinear de I em (x, y). */
+    function sample(I, x, y) {
+      const ix = Math.floor(x), iy = Math.floor(y);
+      const fx = x - ix, fy = y - iy;
+      const i = iy * n + ix;
+      return (I[i] * (1 - fx) + I[i + 1] * fx) * (1 - fy) + (I[i + n] * (1 - fx) + I[i + n + 1] * fx) * fy;
+    }
+
+    /** Alinha I à referência partindo de p0. Retorna {p, residual, ok}. */
+    function align(I, p0) {
+      if (!hinv) return { p: p0, residual: Infinity, ok: false };
+      let px = p0.x, py = p0.y;
+      let residual = Infinity;
+      const count = (hi - lo + 1) * (hi - lo + 1);
+      for (let it = 0; it < maxIter; it++) {
+        if (Math.abs(px) > margin - 2 || Math.abs(py) > margin - 2) return { p: { x: px, y: py }, residual, ok: false };
+        let sx = 0, sy = 0, se = 0;
+        for (let y = lo; y <= hi; y++) {
+          for (let x = lo; x <= hi; x++) {
+            const i = y * n + x;
+            const e = sample(I, x + px, y + py) - T[i];
+            sx += gx[i] * e;
+            sy += gy[i] * e;
+            se += e * e;
+          }
+        }
+        residual = Math.sqrt(se / count);
+        const dpx = hinv[0] * sx + hinv[1] * sy;
+        const dpy = hinv[2] * sx + hinv[3] * sy;
+        px -= dpx;
+        py -= dpy;
+        if (dpx * dpx + dpy * dpy < 1e-6) break;
+      }
+      return { p: { x: px, y: py }, residual, ok: residual < maxResidual };
+    }
+
+    function push(gray) {
+      const { img, contrast } = preprocess(gray);
+      if (!T || contrast < 1) {
+        setKey(img, last);
+        v = { x: 0, y: 0 };
+        return { x: last.x, y: last.y, valid: false, rekeyed: true, residual: Infinity, contrast, method: 'key' };
+      }
+
+      // 1) Lucas-Kanade a partir da previsão (posição + velocidade).
+      let method = 'lk';
+      let r = align(img, { x: p.x + v.x, y: p.y + v.y });
+      if (!r.ok) {
+        // 2) Reserva: correlação de fase acha o deslocamento grosso; o
+        //    Lucas-Kanade refina a partir dele.
+        method = 'fase';
+        const ph = pc.shift(pc.prepare(T), pc.prepare(img));
+        r = align(img, { x: ph.dx, y: ph.dy });
+      }
+      if (!r.ok) {
+        // Perdeu o rastreio: recomeça daqui sem mover a posição (sem saltos).
+        setKey(img, last);
+        v = { x: 0, y: 0 };
+        return { x: last.x, y: last.y, valid: false, rekeyed: true, residual: r.residual, contrast, method };
+      }
+
+      v = { x: r.p.x - p.x, y: r.p.y - p.y };
+      p = r.p;
+      last = { x: keyPos.x + p.x, y: keyPos.y + p.y };
+      let rekeyed = false;
+      if (Math.hypot(p.x, p.y) > rekeyPx || r.residual > maxResidual * 0.7) {
+        setKey(img, last);
+        rekeyed = true;
+      }
+      return { x: last.x, y: last.y, valid: true, rekeyed, residual: r.residual, contrast, method };
+    }
+
+    function reset() {
+      T = null;
+      keyPos = { x: 0, y: 0 };
+      p = { x: 0, y: 0 };
+      v = { x: 0, y: 0 };
+      last = { x: 0, y: 0 };
+    }
+
+    return { n, push, reset };
+  }
+
   /** Converte RGBA (ImageData.data) em luminância. */
   function toGray(rgba, out) {
     for (let i = 0, j = 0; j < out.length; i += 4, j++) {
@@ -272,5 +435,5 @@
     return out;
   }
 
-  return { createPhaseCorrelator, createTracker, toGray, makeFFT };
+  return { createPhaseCorrelator, createTracker, createLKTracker, toGray, makeFFT };
 });
