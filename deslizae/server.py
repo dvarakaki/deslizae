@@ -121,6 +121,7 @@ class TouchpadServer:
         app.add_routes(
             [
                 web.get("/", self._page("index.html")),
+                web.get("/lab", self._page("lab.html")),
                 web.get("/pair", self._local_only(self._page("pair.html"))),
                 web.get("/api/pair-info", self._local_only(self._pair_info)),
                 web.get("/api/status", self._local_only(self._status)),

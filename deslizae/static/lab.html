@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0d12">
+  <meta name="color-scheme" content="dark">
+  <title>Deslizae · Laboratório</title>
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/lab.css">
+</head>
+<body>
+  <div class="app lab" id="app">
+    <header class="bar">
+      <div class="conn">
+        <span class="dot" id="dot" aria-hidden="true"></span>
+        <span class="host" id="host">Conectando…</span>
+      </div>
+      <span class="badge-lab">LAB</span>
+      <span class="transport" id="transport"></span>
+      <span class="latency" id="latency"></span>
+    </header>
+
+    <main class="lab-main">
+      <section class="lab-view">
+        <canvas id="preview" width="128" height="128" aria-label="Imagem analisada da câmera"></canvas>
+        <div class="metrics" id="metrics">
+          <div><span>Câmera</span><b id="m-fps">–</b></div>
+          <div><span>Processamento</span><b id="m-proc">–</b></div>
+          <div><span>Latência câmera</span><b id="m-lat">–</b></div>
+          <div><span>Qualidade (PSR)</span><b id="m-psr">–</b></div>
+          <div class="bar-meter"><i id="m-psr-bar"></i></div>
+          <div><span>Tremor parado</span><b id="m-jitter">–</b></div>
+          <div><span>Giroscópio</span><b id="m-gyro">–</b></div>
+        </div>
+      </section>
+
+      <section class="lab-controls">
+        <label class="row toggle send"><span>Enviar ao cursor<small>Comece desligado e observe as métricas</small></span><input type="checkbox" id="send"></label>
+        <div class="lab-actions">
+          <button id="btn-calibrate">Calibrar giroscópio</button>
+          <button id="btn-zero">Zerar tremor</button>
+        </div>
+        <p class="lab-status" id="status">Toque em “Iniciar” para abrir a câmera frontal.</p>
+
+        <details>
+          <summary>Ajustes</summary>
+          <label class="row slider"><span>Sensibilidade <output id="out-sens"></output></span><input type="range" id="sens" min="2" max="120" step="1"></label>
+          <label class="row slider"><span>Aceleração <output id="out-accel"></output></span><input type="range" id="accel" min="0" max="3" step="0.1"></label>
+          <label class="row slider"><span>Limiar de ruído (px) <output id="out-noise"></output></span><input type="range" id="noise" min="0" max="1" step="0.01"></label>
+          <label class="row slider"><span>Qualidade mínima (PSR) <output id="out-minPsr"></output></span><input type="range" id="minPsr" min="3" max="30" step="0.5"></label>
+          <label class="row slider"><span>Sincronia do giroscópio (ms) <output id="out-gyroDelay"></output></span><input type="range" id="gyroDelay" min="-100" max="150" step="5"></label>
+          <label class="row toggle"><span>Alta precisão (256 px)<small>Mais preciso, mais pesado</small></span><input type="checkbox" id="hiRes"></label>
+          <label class="row toggle"><span>Compensar inclinação</span><input type="checkbox" id="gyroComp"></label>
+          <label class="row toggle"><span>Suavização (240 Hz)</span><input type="checkbox" id="smoothing"></label>
+          <label class="row toggle"><span>Inverter X</span><input type="checkbox" id="invX"></label>
+          <label class="row toggle"><span>Inverter Y</span><input type="checkbox" id="invY"></label>
+          <label class="row toggle"><span>Trocar eixos X/Y</span><input type="checkbox" id="swap"></label>
+        </details>
+      </section>
+    </main>
+
+    <footer class="mouse-buttons">
+      <button class="mbtn" data-button="0" aria-label="Botão esquerdo">E</button>
+      <div class="wheel" id="wheel" aria-label="Rodinha: arraste para rolar"><span>⇅</span></div>
+      <button class="mbtn" data-button="1" aria-label="Botão direito">D</button>
+    </footer>
+
+    <div class="overlay" id="intro">
+      <div class="overlay-card">
+        <h2>Mouse pela câmera</h2>
+        <p>Deite o celular na mesa com a <b>tela para cima</b>. A câmera frontal acompanha o
+          teto. Segure pela parte de baixo, <b>sem cobrir a câmera</b>, e deslize como um mouse.</p>
+        <p class="small">Funciona melhor com luminárias, cantos ou textura no campo de visão.
+          Teto liso e ventilador girando atrapalham.</p>
+        <button class="primary" id="btn-start">Iniciar</button>
+      </div>
+    </div>
+  </div>
+
+  <video id="video" playsinline muted autoplay></video>
+  <script src="/static/flow.js"></script>
+  <script src="/static/lab.js"></script>
+</body>
+</html>
