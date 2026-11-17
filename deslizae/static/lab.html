@@ -49,21 +49,25 @@
 
       <label class="row slider"><span>Sensibilidade <output id="out-sens"></output></span><input type="range" id="sens" min="2" max="120" step="1"></label>
       <label class="row slider"><span>Aceleração <output id="out-accel"></output></span><input type="range" id="accel" min="0" max="3" step="0.1"></label>
-      <label class="row slider"><span>Suavidade <output id="out-smooth"></output></span><input type="range" id="smooth" min="0.3" max="5" step="0.1"></label>
+      <label class="row toggle"><span>Fusão com acelerômetro<small>Responde antes que a câmera e preenche o movimento entre quadros</small></span><input type="checkbox" id="fusion"></label>
       <label class="row toggle"><span>Touchpad na palma<small>Use a parte de baixo como touchpad; a palma apoiada é ignorada</small></span><input type="checkbox" id="touchpad"></label>
       <label class="row slider"><span>Sensibilidade do touchpad <output id="out-tpSens"></output></span><input type="range" id="tpSens" min="0.5" max="5" step="0.1"></label>
       <label class="row toggle"><span>Compensar inclinação</span><input type="checkbox" id="gyroComp"></label>
       <label class="row toggle"><span>Anticintilação<small>Ignora faixas de lâmpadas LED/fluorescentes</small></span><input type="checkbox" id="rowNormalize"></label>
-      <label class="row toggle"><span>Travar exposição</span><input type="checkbox" id="lockExposure"></label>
+      <label class="row toggle"><span>Exposição manual curta<small>Evita queda de fps no escuro e imagem borrada</small></span><input type="checkbox" id="lockExposure"></label>
       <label class="row toggle"><span>Campo amplo<small>Vê mais do teto; menos preciso</small></span><input type="checkbox" id="wide"></label>
       <label class="row toggle"><span>Suavização no PC (240 Hz)</span><input type="checkbox" id="smoothing"></label>
 
       <details>
         <summary>Diagnóstico</summary>
         <div class="metrics">
-          <div><span>Câmera</span><b id="m-fps">–</b></div>
-          <div><span>Resolução</span><b id="m-res">–</b></div>
+          <div><span>Quadros processados</span><b id="m-fps">–</b></div>
+          <div><span>Câmera pedida</span><b id="m-res">–</b></div>
+          <div><span>Caminho dos quadros</span><b id="m-path">–</b></div>
           <div><span>Processamento</span><b id="m-proc">–</b></div>
+          <div><span>Acelerômetro</span><b id="m-accel">–</b></div>
+          <div><span>Fusão</span><b id="m-fusion">–</b></div>
+          <div><span>Saída para o cursor</span><b id="m-out">–</b></div>
           <div><span>Latência câmera</span><b id="m-lat">–</b></div>
           <div><span>Qualidade do alinhamento</span><b id="m-res2">–</b></div>
           <div><span>Tremor parado</span><b id="m-jitter">–</b></div>
@@ -115,6 +119,7 @@
   <video id="video" playsinline muted autoplay></video>
   <script src="/static/flow.js"></script>
   <script src="/static/motion.js"></script>
+  <script src="/static/fusion.js"></script>
   <script src="/static/gestures.js"></script>
   <script src="/static/lab.js"></script>
 </body>

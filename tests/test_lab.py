@@ -47,7 +47,7 @@ def test_https_serves_lab_page(tmp_path):
                 page = await http.get(base + "/lab", ssl=False)
                 assert page.status == 200
                 assert "Deslizae · Mouse" in await page.text()
-                for asset in ("flow.js", "flow-worker.js", "motion.js", "lab.js", "lab.css"):
+                for asset in ("flow.js", "flow-worker.js", "motion.js", "fusion.js", "gestures.js", "lab.js", "lab.css"):
                     assert (await http.get(f"{base}/static/{asset}", ssl=False)).status == 200
         finally:
             await runner.cleanup()
