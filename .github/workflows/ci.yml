@@ -45,4 +45,7 @@ jobs:
           node-version: 22
 
       - name: Checar sintaxe do JavaScript
-        run: node --check deslizae/static/app.js
+        run: for f in deslizae/static/*.js; do node --check "$f"; done
+
+      - name: Testar o estimador de deslocamento
+        run: node --test tests/js/*.test.js
