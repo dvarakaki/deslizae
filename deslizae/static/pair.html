@@ -19,7 +19,7 @@
     * { box-sizing: border-box; }
     body {
       margin: 0; min-height: 100vh;
-      display: grid; place-items: center;
+      display: grid; place-items: center; align-content: center; gap: 20px;
       padding: 32px 16px;
       background: var(--bg); color: var(--text);
       font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -65,6 +65,13 @@
     details summary { cursor: pointer; }
     details code { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
     .others { margin: 6px 0 0; padding-left: 18px; }
+    .lab-card { border-color: #f4b740; }
+    .lab-card[hidden] { display: none; }
+    .tag {
+      display: inline-block; margin-left: 8px; vertical-align: middle;
+      padding: 2px 8px; border-radius: 6px;
+      background: #f4b740; color: #1a1300; font-size: 11px; font-weight: 800; letter-spacing: .06em;
+    }
   </style>
 </head>
 <body>
@@ -102,6 +109,22 @@
       </details>
     </div>
   </main>
+
+  <section class="card lab-card" id="lab" hidden>
+    <div class="qr" id="lab-qr" aria-label="QR code do laboratório"></div>
+    <div>
+      <h1>Mouse pela câmera <span class="tag">LABORATÓRIO</span></h1>
+      <p class="sub">Experimental: o celular deitado, de tela para cima, acompanha o teto.</p>
+      <ol>
+        <li>Escaneie <b>este</b> QR code com o celular.</li>
+        <li>O celular avisa que o certificado não é confiável (ele foi gerado neste PC):
+          toque em <b>Avançado → Continuar</b>.</li>
+        <li>Toque em <b>Iniciar</b> e permita a câmera e os sensores de movimento.</li>
+      </ol>
+      <div class="url"><code id="lab-url">…</code><button id="lab-copy">Copiar</button></div>
+    </div>
+  </section>
+
   <script>
     'use strict';
     const $ = (s) => document.querySelector(s);
@@ -115,6 +138,11 @@
       }
       $('#qr').innerHTML = info.qr_svg;
       $('#url').textContent = info.url;
+      if (info.lab_url) {
+        $('#lab').hidden = false;
+        $('#lab-qr').innerHTML = info.lab_qr_svg;
+        $('#lab-url').textContent = info.lab_url;
+      }
       const others = info.urls.slice(1);
       $('#others-wrap').hidden = others.length === 0;
       $('#others').replaceChildren(...others.map((u) => {
@@ -141,13 +169,15 @@
       }
     }
 
-    $('#copy').addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText($('#url').textContent);
-        $('#copy').textContent = 'Copiado';
-        setTimeout(() => { $('#copy').textContent = 'Copiar'; }, 1500);
-      } catch { /* sem permissão de área de transferência */ }
-    });
+    for (const [btn, src] of [['#copy', '#url'], ['#lab-copy', '#lab-url']]) {
+      $(btn).addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText($(src).textContent);
+          $(btn).textContent = 'Copiado';
+          setTimeout(() => { $(btn).textContent = 'Copiar'; }, 1500);
+        } catch { /* sem permissão de área de transferência */ }
+      });
+    }
 
     loadInfo().catch(() => { $('#url').textContent = 'Não foi possível falar com o agente.'; });
     pollStatus();

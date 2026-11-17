@@ -185,6 +185,15 @@
       if (msg.type === 'hello') {
         hostName = msg.host;
         setStatus('ok');
+        // Agente aberto com --lab: oferece o laboratório (HTTPS, outra porta).
+        const labLink = $('#lab-link');
+        if (msg.lab_port) {
+          labLink.href = `https://${location.hostname}:${msg.lab_port}/lab?t=${encodeURIComponent(token)}`;
+          if (labLink.hidden) toast('Mouse pela câmera disponível em Ajustes');
+          labLink.hidden = false;
+        } else {
+          labLink.hidden = true;
+        }
       } else if (msg.type === 'answer' && pc) {
         pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp }).catch(() => { closeRtc(); updateTransport(); });
       } else if (msg.type === 'rtc-unavailable') {

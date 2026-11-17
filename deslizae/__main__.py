@@ -137,8 +137,8 @@ async def _start_lab_site(runner: web.AppRunner, server: TouchpadServer, cfg: Co
             print(f"A porta {port} (laboratório) já está em uso.")
             return None
         raise
-    ip = primary_ipv4() or "127.0.0.1"
-    return f"https://{ip}:{port}/lab?t={cfg.token}"
+    server.lab_port = port
+    return server.lab_url(primary_ipv4())
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -302,6 +302,19 @@ input[type=checkbox]:checked::after { transform: translateX(18px); }
 }
 .segmented button[aria-checked="true"] { background: var(--accent); color: #fff; font-weight: 600; }
 
+/* ---------- atalho para o laboratório (agente com --lab) ---------- */
+.lab-link {
+  margin: 4px 0 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--warn);
+  border-radius: 12px;
+  color: var(--text);
+  text-decoration: none;
+}
+.lab-link[hidden] { display: none; }
+.lab-link small { display: block; color: var(--warn); font-size: 12px; }
+.lab-link b { color: var(--warn); font-size: 20px; }
+
 /* ---------- aviso rápido ---------- */
 .toast {
   position: fixed;

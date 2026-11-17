@@ -98,6 +98,7 @@ class TouchpadServer:
         self.smoother = Smoother(mouse)
         self.clients: dict[int, Client] = {}
         self._next_id = 1
+        self.lab_port: int | None = None  # definido pelo __main__ com --lab
         self.app = self._build_app()
         self.app.on_shutdown.append(self._on_shutdown)
         self.app.on_cleanup.append(self._on_cleanup)
@@ -162,15 +163,25 @@ class TouchpadServer:
         ip = ip or primary_ipv4() or "127.0.0.1"
         return f"http://{ip}:{self.config.port}/?t={self.config.token}"
 
+    def lab_url(self, ip: str | None = None) -> str | None:
+        """Endereço do laboratório (HTTPS), se o agente foi aberto com --lab."""
+        if not self.lab_port:
+            return None
+        ip = ip or primary_ipv4() or "127.0.0.1"
+        return f"https://{ip}:{self.lab_port}/lab?t={self.config.token}"
+
     async def _pair_info(self, _request: web.Request) -> web.Response:
         ips = all_ipv4()
         urls = [self.phone_url(ip) for ip in ips]
+        lab = self.lab_url(ips[0]) if ips else None
         return web.json_response(
             {
                 "host": socket.gethostname(),
                 "url": urls[0] if urls else None,
                 "urls": urls,
                 "qr_svg": qr_svg(urls[0]) if urls else None,
+                "lab_url": lab,
+                "lab_qr_svg": qr_svg(lab) if lab else None,
             }
         )
 
@@ -223,7 +234,9 @@ class TouchpadServer:
         )
         self.clients[cid] = client
         log.info("Celular conectado: %s", addr)
-        await ws.send_json({"type": "hello", "host": socket.gethostname(), "rtc": HAS_RTC})
+        await ws.send_json(
+            {"type": "hello", "host": socket.gethostname(), "rtc": HAS_RTC, "lab_port": self.lab_port}
+        )
 
         try:
             async for msg in ws:
