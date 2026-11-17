@@ -149,7 +149,58 @@
     return A;
   }
 
+  /**
+   * Ajuste do giroscópio com medida de qualidade: R² (fração da variação da
+   * imagem explicada pela inclinação). Abaixo de ~0,6, o passo foi feito com
+   * deslize junto, ou sem inclinar o suficiente, e a compensação atrapalharia.
+   */
+  function gyroFit(samples) {
+    const M = gyroMatrix(samples);
+    if (!M) return null;
+    let ss = 0, sr = 0, mx = 0, my = 0;
+    for (const s of samples) { mx += s.dx; my += s.dy; }
+    mx /= samples.length; my /= samples.length;
+    for (const s of samples) {
+      const px = M[0] * s.gx + M[1] * s.gy, py = M[2] * s.gx + M[3] * s.gy;
+      sr += (s.dx - px) ** 2 + (s.dy - py) ** 2;
+      ss += (s.dx - mx) ** 2 + (s.dy - my) ** 2;
+    }
+    return { M, r2: ss > 0 ? 1 - sr / ss : 0 };
+  }
+
+  /**
+   * Vetor de um gesto a partir da trajetória: o ponto MAIS DISTANTE da
+   * origem. Assim "deslizar e voltar" ainda mede a ida (o ponto final de
+   * quem volta é perto de zero, ou até do lado oposto).
+   */
+  function gestureVector(traj) {
+    let best = { x: 0, y: 0 }, bd = 0;
+    for (const p of traj) {
+      const d = p.x * p.x + p.y * p.y;
+      if (d > bd) { bd = d; best = { x: p.x, y: p.y }; }
+    }
+    return best;
+  }
+
+  /**
+   * Converte um vetor do referencial da tela para o do aparelho. Com o
+   * celular deitado, o sistema pode girar a tela sozinho; o navegador gira a
+   * imagem da câmera junto, e os eixos trocariam no meio do uso. `angle` é
+   * screen.orientation.angle (0, 90, 180, 270).
+   */
+  function screenToDevice(v, angle) {
+    switch (((angle % 360) + 360) % 360) {
+      case 90: return { x: -v.y, y: v.x };
+      case 180: return { x: -v.x, y: -v.y };
+      case 270: return { x: v.y, y: -v.x };
+      default: return { x: v.x, y: v.y };
+    }
+  }
+
   const apply = (M, x, y) => ({ x: M[0] * x + M[1] * y, y: M[2] * x + M[3] * y });
 
-  return { createOneEuro2D, createMotionFilter, gyroMatrix, axisMatrix, apply };
+  return {
+    createOneEuro2D, createMotionFilter, gyroMatrix, gyroFit, axisMatrix,
+    gestureVector, screenToDevice, apply,
+  };
 });

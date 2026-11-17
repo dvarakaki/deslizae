@@ -6,7 +6,7 @@ const test = require('node:test');
 const path = require('node:path');
 
 const { createTracker, createPhaseCorrelator } = require(path.join(__dirname, '../../deslizae/static/flow.js'));
-const { createMotionFilter, gyroMatrix, axisMatrix, apply } = require(path.join(__dirname, '../../deslizae/static/motion.js'));
+const { createMotionFilter, gyroMatrix, gyroFit, axisMatrix, gestureVector, screenToDevice, apply } = require(path.join(__dirname, '../../deslizae/static/motion.js'));
 const { rng, makeScene, crop } = require('./scene.js');
 
 const N = 128;
@@ -119,6 +119,37 @@ test('calibração: matriz do giroscópio e orientação dos eixos', () => {
   const right = apply(A, -40, 2), fwd = apply(A, 1, 35);
   assert.ok(right.x > 39 && Math.abs(right.y) < 1e-9, `direita → ${right.x.toFixed(1)}, ${right.y.toFixed(1)}`);
   assert.ok(fwd.y < -34, `frente deveria ir para cima, foi ${fwd.y.toFixed(1)}`);
+});
+
+test('gesto "deslizar e voltar" mede a ida, não o retorno', () => {
+  const traj = [];
+  for (let i = 0; i <= 20; i++) traj.push({ x: -i * 2, y: 0.1 * i }); // vai (imagem para a esquerda)
+  for (let i = 20; i >= -3; i--) traj.push({ x: -i * 2, y: 0.1 * i }); // volta e passa um pouco
+  const v = gestureVector(traj);
+  assert.ok(v.x < -39, `deveria medir a ida, mediu ${v.x}`);
+});
+
+test('ajuste do giroscópio: R² alto só quando a imagem segue a inclinação', () => {
+  const rand = rng(12);
+  const good = Array.from({ length: 60 }, () => {
+    const gx = (rand() - 0.5) * 2, gy = (rand() - 0.5) * 2;
+    return { gx, gy, dx: -8 * gy + (rand() - 0.5) * 0.2, dy: 8 * gx + (rand() - 0.5) * 0.2 };
+  });
+  assert.ok(gyroFit(good).r2 > 0.95);
+  // Deslizou junto: a imagem anda por conta própria, sem relação com o giro.
+  const bad = good.map((s) => ({ ...s, dx: s.dx + (rand() - 0.5) * 40, dy: s.dy + (rand() - 0.5) * 40 }));
+  assert.ok(gyroFit(bad).r2 < 0.6);
+});
+
+test('rotação automática da tela não troca os eixos (referencial do aparelho)', () => {
+  // Com a tela girada, o navegador gira a imagem da câmera junto. O mesmo
+  // movimento físico chega rotacionado; convertido, volta a ser o mesmo.
+  const phys = { x: 5, y: -2 };
+  const seen = { 0: phys, 90: { x: phys.y, y: -phys.x }, 180: { x: -phys.x, y: -phys.y }, 270: { x: -phys.y, y: phys.x } };
+  for (const [angle, v] of Object.entries(seen)) {
+    const d = screenToDevice(v, Number(angle));
+    assert.ok(Math.abs(d.x - phys.x) < 1e-9 && Math.abs(d.y - phys.y) < 1e-9, `ângulo ${angle}: (${d.x}, ${d.y})`);
+  }
 });
 
 test('correlator continua preciso com normalização por linha', () => {
