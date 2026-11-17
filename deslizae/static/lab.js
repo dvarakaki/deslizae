@@ -19,7 +19,8 @@
  * window.__fakeVel = {x, y} controlam o movimento).
  */
 (() => {
-  const OP = { PING: 0x05, MOVE: 0x10, SCROLL: 0x11, BUTTON: 0x12, PONG: 0x85 };
+  const OP = { PING: 0x05, MOVE: 0x10, SCROLL: 0x11, BUTTON: 0x12, CLICK: 0x13, ZOOM: 0x14, PONG: 0x85 };
+  const PALM_PX = 42; // contato mais largo que isto (px CSS) é palma, não ponta de dedo
   const CALIB_KEY = 'labCalib3';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -28,6 +29,7 @@
   // ------------------------------------------------------------- ajustes
   const DEFAULTS = {
     sens: 18, accel: 1.2, smooth: 1.2, startPx: 0.35, gyroDelay: 0,
+    touchpad: true, tpSens: 1.6,
     gyroComp: true, rowNormalize: true, lockExposure: true, wide: false, smoothing: true,
     invX: false, invY: false, swap: false,
   };
@@ -139,7 +141,7 @@
     ws = sock;
     sock.onopen = () => {
       wsOpen = true;
-      cur.seq = scr.seq = 0; cur.x = cur.y = scr.x = scr.y = 0;
+      for (const p of [cur, scr, zm]) { p.seq = 0; p.x = p.y = 0; }
       startRtc(sock);
       updateDot();
     };
@@ -200,6 +202,7 @@
   // -------------------------------------------------------------- envio
   const cur = { op: OP.MOVE, seq: 0, x: 0, y: 0 };
   const scr = { op: OP.SCROLL, seq: 0, x: 0, y: 0 };
+  const zm = { op: OP.ZOOM, seq: 0, x: 0, y: 0 };
   let eventId = 0;
 
   function sendPos(p, t) {
@@ -221,6 +224,15 @@
     if (dcOpen) { try { dc.send(b); } catch { /* ignora */ } }
     if (wsOpen) ws.send(b);
     if (navigator.vibrate) navigator.vibrate(down ? 10 : 5);
+  }
+
+  function sendClick(button) {
+    const b = new ArrayBuffer(26), v = new DataView(b);
+    v.setUint8(0, OP.CLICK); v.setUint32(1, ++eventId, true);
+    v.setUint8(5, button);
+    v.setUint32(6, cur.seq, true); v.setFloat64(10, cur.x, true); v.setFloat64(18, cur.y, true);
+    if (dcOpen) { try { dc.send(b); } catch { /* ignora */ } }
+    if (wsOpen) ws.send(b);
   }
 
   // ------------------------------------------------------------ giroscópio
@@ -431,6 +443,7 @@
 
     if (wizard || !calib || (!m.dx && !m.dy)) return;
     if (performance.now() < freezeUntil) return; // clique estável
+    if (gestures.activeCount > 0) return;         // dedo no touchpad: a câmera fica quieta
 
     let v = Motion.apply(calib.A, m.dx, m.dy);
     if (settings.swap) v = { x: v.y, y: v.x };
@@ -660,12 +673,45 @@
   wheel.addEventListener('pointerup', wheelEnd);
   wheel.addEventListener('pointercancel', wheelEnd);
 
+  // ---------------------------------------------------- touchpad na palma
+  // Mesmo motor de gestos do touchpad (gestures.js), com rejeição de palma:
+  // contato largo é ignorado; com o celular deslizando, a mão está no "modo
+  // mouse" e novos toques são ignorados; um toque parado quando outro dedo
+  // chega é a palma apoiada; e "segurar para arrastar" fica desligado.
+  const palm = el('palm');
+  const gestures = window.DeslizaeGestures.create(palm, {
+    settings: () => ({
+      sensitivity: settings.tpSens, acceleration: 1.0, scrollSpeed: 1.5, naturalScroll: true,
+      inertia: true, tapToClick: true, tapDrag: true, pinchZoom: true,
+      longPressDrag: false, dropResting: true,
+    }),
+    toUi,
+    accept: (e) => {
+      if (!settings.touchpad) return false;
+      if (e.target.closest && e.target.closest('.gear')) return false;
+      if (e.pointerType === 'touch' && (e.width > PALM_PX || e.height > PALM_PX)) return false;
+      return !motion.moving;
+    },
+    move: (dx, dy, t) => { cur.x += dx; cur.y += dy; sendPos(cur, t); },
+    scroll: (wx, wy, t) => { scr.x += wx; scr.y += wy; sendPos(scr, t); },
+    zoom: (z, t) => { zm.x += z; sendPos(zm, t); },
+    button: sendButton,
+    click: sendClick,
+    haptic: (ms) => { if (navigator.vibrate) navigator.vibrate(ms); },
+    canInertia: () => wsOpen,
+    onTouches: (points) => {
+      palm.classList.toggle('touching', points.length > 0);
+      // Ao soltar, a câmera espera um instante: o toque pode ter balançado o celular.
+      if (!points.length) freezeUntil = performance.now() + 150;
+    },
+  });
+
   // ------------------------------------------------------------- ajustes
   const SLIDERS = {
     sens: (v) => `${v}×`, accel: (v) => fmt(v, 1), smooth: (v) => fmt(v, 1),
-    startPx: (v) => fmt(v, 2), gyroDelay: (v) => `${v}`,
+    startPx: (v) => fmt(v, 2), gyroDelay: (v) => `${v}`, tpSens: (v) => `${fmt(v, 1)}×`,
   };
-  const TOGGLES = ['gyroComp', 'rowNormalize', 'lockExposure', 'wide', 'smoothing', 'invX', 'invY', 'swap'];
+  const TOGGLES = ['touchpad', 'gyroComp', 'rowNormalize', 'lockExposure', 'wide', 'smoothing', 'invX', 'invY', 'swap'];
 
   function syncControls() {
     for (const [id, f] of Object.entries(SLIDERS)) {

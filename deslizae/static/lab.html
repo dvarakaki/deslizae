@@ -25,7 +25,8 @@
       <button class="key right" data-button="1" aria-label="Botão direito"></button>
     </section>
 
-    <section class="palm">
+    <!-- A palma também é um touchpad (com rejeição de palma). -->
+    <section class="palm" id="palm" aria-label="Touchpad">
       <div class="brand"><img src="/static/icon.svg" alt=""> Deslizae</div>
       <span class="status-dot" id="dot" title="Estado"></span>
       <button class="gear" id="btn-settings" aria-label="Ajustes">
@@ -49,6 +50,8 @@
       <label class="row slider"><span>Sensibilidade <output id="out-sens"></output></span><input type="range" id="sens" min="2" max="120" step="1"></label>
       <label class="row slider"><span>Aceleração <output id="out-accel"></output></span><input type="range" id="accel" min="0" max="3" step="0.1"></label>
       <label class="row slider"><span>Suavidade <output id="out-smooth"></output></span><input type="range" id="smooth" min="0.3" max="5" step="0.1"></label>
+      <label class="row toggle"><span>Touchpad na palma<small>Use a parte de baixo como touchpad; a palma apoiada é ignorada</small></span><input type="checkbox" id="touchpad"></label>
+      <label class="row slider"><span>Sensibilidade do touchpad <output id="out-tpSens"></output></span><input type="range" id="tpSens" min="0.5" max="5" step="0.1"></label>
       <label class="row toggle"><span>Compensar inclinação</span><input type="checkbox" id="gyroComp"></label>
       <label class="row toggle"><span>Anticintilação<small>Ignora faixas de lâmpadas LED/fluorescentes</small></span><input type="checkbox" id="rowNormalize"></label>
       <label class="row toggle"><span>Travar exposição</span><input type="checkbox" id="lockExposure"></label>
@@ -99,7 +102,8 @@
       <div class="overlay-card">
         <h2>Celular como mouse</h2>
         <p>Deite o celular na mesa, <b>tela para cima</b>, com o <b>topo apontando para longe de você</b>.</p>
-        <p>Os <b>botões ficam em cima</b>, como num mouse; apoie a palma na parte de baixo.
+        <p>Os <b>botões ficam em cima</b>, como num mouse; apoie a palma na parte de baixo, que
+          também funciona como <b>touchpad</b> quando o celular está parado.
           <b>Não cubra a câmera</b> (o círculo no centro, no topo).</p>
         <p class="small">A câmera frontal acompanha o teto. Luminárias, cantos ou textura ajudam;
           teto liso e ventilador girando atrapalham.</p>
@@ -111,6 +115,7 @@
   <video id="video" playsinline muted autoplay></video>
   <script src="/static/flow.js"></script>
   <script src="/static/motion.js"></script>
+  <script src="/static/gestures.js"></script>
   <script src="/static/lab.js"></script>
 </body>
 </html>

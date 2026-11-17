@@ -27,7 +27,14 @@
    3. **Para a direita**: deslize ~10 cm (pode voltar depois).
    4. **Para frente**: deslize ~10 cm para longe de você (pode voltar).
 
-Pronto: o cursor segue o celular. A calibração fica salva; refaça em *Ajustes →
+Pronto: o cursor segue o celular.
+
+**A palma também é um touchpad.** Com o celular parado, a parte de baixo aceita os
+mesmos gestos do touchpad (mover, tocar, toque duplo e arrastar, 2 dedos para rolar,
+pinça). A rejeição de palma ignora: contato largo (palma), toques novos enquanto o
+celular desliza, e um toque parado quando outro dedo chega (a palma apoiada). O
+"segurar para arrastar" fica desligado ali, para a palma descansando não virar
+arraste; enquanto um dedo usa o touchpad, a câmera não move o cursor. A calibração fica salva; refaça em *Ajustes →
 Calibrar* se mudar de lugar. O ponto no canto da palma indica o estado: verde
 (parado), azul (movendo), amarelo (sem textura no teto), vermelho (sem conexão).
 

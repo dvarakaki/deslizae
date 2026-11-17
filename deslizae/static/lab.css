@@ -60,7 +60,9 @@
   border: 1px solid var(--line);
   min-height: 0;
 }
-.brand { display: flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 600; opacity: .55; }
+.palm { touch-action: none; transition: border-color .15s; }
+.palm.touching { border-color: var(--accent); }
+.brand { pointer-events: none; display: flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 600; opacity: .55; }
 .brand img { width: 22px; height: 22px; }
 .status-dot {
   position: absolute; left: 18px; bottom: 18px;
