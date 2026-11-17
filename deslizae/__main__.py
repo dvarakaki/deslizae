@@ -30,6 +30,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument("--dry-run", action="store_true", help="não mexe no cursor; só registra")
     p.add_argument("--stats", action="store_true", help="mostra o ritmo de chegada dos movimentos")
+    p.add_argument(
+        "--lab",
+        action="store_true",
+        help="experimental: sobe HTTPS na porta seguinte com o modo mouse pela câmera (/lab)",
+    )
     p.add_argument("-v", "--verbose", action="store_true", help="log detalhado")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p.parse_args(argv)
@@ -74,14 +79,30 @@ async def run(args: argparse.Namespace) -> int:
             return 1
         raise
 
+    lab_url = None
+    if args.lab:
+        lab_url = await _start_lab_site(runner, server, cfg)
+        if lab_url is None:
+            await runner.cleanup()
+            return 1
+
     url = server.phone_url()
     pair_url = f"http://localhost:{cfg.port}/pair"
     print()
     print(f"  Deslizae {__version__}" + ("  [dry-run]" if args.dry_run else ""))
-    print("  Escaneie com a câmera do celular (mesmo Wi-Fi do PC):")
-    print()
-    print(qr_terminal(url))
-    print(f"  Endereço:   {url}")
+    if lab_url:
+        print("  MODO LABORATÓRIO: mouse pela câmera olhando para o teto (experimental).")
+        print("  Escaneie com o celular. Na primeira vez, aceite o aviso de certificado")
+        print('  ("Avançado → Continuar"): o certificado foi gerado neste PC.')
+        print()
+        print(qr_terminal(lab_url))
+        print(f"  Laboratório: {lab_url}")
+        print(f"  Touchpad:    {url}")
+    else:
+        print("  Escaneie com a câmera do celular (mesmo Wi-Fi do PC):")
+        print()
+        print(qr_terminal(url))
+        print(f"  Endereço:   {url}")
     print(f"  Pareamento: {pair_url}")
     print()
     print("  Ctrl+C para encerrar.")
@@ -98,6 +119,26 @@ async def run(args: argparse.Namespace) -> int:
     finally:
         await runner.cleanup()
     return 0
+
+
+async def _start_lab_site(runner: web.AppRunner, server: TouchpadServer, cfg: Config) -> str | None:
+    """HTTPS na porta seguinte: o navegador só libera câmera e giroscópio assim."""
+    from .config import config_dir
+    from .netinfo import all_ipv4, primary_ipv4
+    from .tls import ensure_certificate, server_context
+
+    cert, key = ensure_certificate(config_dir() / "tls", all_ipv4())
+    port = cfg.port + 1
+    site = web.TCPSite(runner, host="0.0.0.0", port=port, ssl_context=server_context(cert, key))
+    try:
+        await site.start()
+    except OSError as exc:
+        if exc.errno in (errno.EADDRINUSE, 10048):
+            print(f"A porta {port} (laboratório) já está em uso.")
+            return None
+        raise
+    ip = primary_ipv4() or "127.0.0.1"
+    return f"https://{ip}:{port}/lab?t={cfg.token}"
 
 
 def main(argv: list[str] | None = None) -> int:

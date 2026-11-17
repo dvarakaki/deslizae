@@ -25,6 +25,7 @@ dependencies = [
   "aiohttp>=3.9",
   "qrcode>=7.4",
   "aiortc>=1.9",
+  "cryptography>=42",
 ]
 
 [project.urls]
