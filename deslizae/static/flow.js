@@ -73,7 +73,7 @@
   }
 
   // ------------------------------------------------------ correlação de fase
-  function createPhaseCorrelator(n) {
+  function createPhaseCorrelator(n, { rowNormalize = false } = {}) {
     const fft = makeFFT(n);
     const size = n * n;
     const tmpRe = new Float64Array(n);
@@ -108,18 +108,35 @@
       for (let x = 0; x < n; x++) fft(re, im, x, n, inverse, tmpRe, tmpIm);
     }
 
-    /** Prepara um quadro (Float32Array/Array N×N): espectro + medida de textura. */
+    /**
+     * Prepara um quadro (Float32Array/Array N×N): espectro + medida de textura.
+     *
+     * Com `rowNormalize`, cada linha é dividida pela própria média. Lâmpadas
+     * LED/fluorescentes piscam a 100–120 Hz e, com o obturador da câmera
+     * lendo uma linha por vez, aparecem como faixas horizontais que andam a
+     * cada quadro: um ganho multiplicativo por linha, que a divisão cancela.
+     * Sem isso, as faixas viram um falso movimento vertical.
+     */
     function prepare(gray) {
+      const re = new Float64Array(size);
+      const im = new Float64Array(size);
       let mean = 0;
       for (let i = 0; i < size; i++) mean += gray[i];
       mean /= size;
-      const re = new Float64Array(size);
-      const im = new Float64Array(size);
+      if (rowNormalize) {
+        for (let y = 0; y < n; y++) {
+          let rm = 0;
+          for (let x = 0; x < n; x++) rm += gray[y * n + x];
+          rm = Math.max(1, rm / n);
+          for (let x = 0; x < n; x++) re[y * n + x] = (gray[y * n + x] / rm - 1) * mean;
+        }
+      } else {
+        for (let i = 0; i < size; i++) re[i] = gray[i] - mean;
+      }
       let energy = 0;
       for (let i = 0; i < size; i++) {
-        const v = gray[i] - mean;
-        energy += v * v;
-        re[i] = v * window[i];
+        energy += re[i] * re[i];
+        re[i] *= window[i];
       }
       fft2(re, im, false);
       return { re, im, contrast: Math.sqrt(energy / size) };
@@ -189,6 +206,64 @@
     return { n, prepare, shift };
   }
 
+  /**
+   * Rastreador com quadro de referência (como os sensores de mouse óptico).
+   *
+   * Comparar cada quadro com o anterior soma o erro de cada medida (~0,05 px)
+   * a cada quadro: parado, o cursor "anda sozinho". Aqui cada quadro é
+   * comparado com um quadro de referência fixo; parado, a posição só oscila
+   * em torno do mesmo ponto, sem acumular. A referência só é trocada quando o
+   * deslocamento em relação a ela passa de `rekeyPx` (a sobreposição entre as
+   * imagens diminui) ou quando a qualidade cai muito (luz mudou, mão na
+   * frente). Assim o erro acumula só a cada troca, não a cada quadro.
+   *
+   * push(gray) → { x, y, psr, contrast, valid, rekeyed }, posição em pixels
+   * da imagem desde o início.
+   */
+  function createTracker(n, { rekeyPx = 8, minPsr = 6, rowNormalize = true } = {}) {
+    const pc = createPhaseCorrelator(n, { rowNormalize });
+    let key = null;
+    let keyPsr = 0;
+    let keyPos = { x: 0, y: 0 };
+    let last = { x: 0, y: 0 };
+
+    function rekey(frame, pos) {
+      key = frame;
+      keyPos = { x: pos.x, y: pos.y };
+      keyPsr = 0;
+    }
+
+    function push(gray) {
+      const cur = pc.prepare(gray);
+      if (!key) {
+        rekey(cur, last);
+        return { x: last.x, y: last.y, psr: 0, contrast: cur.contrast, valid: false, rekeyed: true };
+      }
+      const r = pc.shift(key, cur);
+      if (r.psr < minPsr) {
+        // Perdeu o rastreio: recomeça daqui, sem mover a posição (sem saltos).
+        rekey(cur, last);
+        return { x: last.x, y: last.y, psr: r.psr, contrast: cur.contrast, valid: false, rekeyed: true };
+      }
+      if (!keyPsr) keyPsr = r.psr;
+      last = { x: keyPos.x + r.dx, y: keyPos.y + r.dy };
+      let rekeyed = false;
+      if (Math.hypot(r.dx, r.dy) > rekeyPx || r.psr < keyPsr * 0.5) {
+        rekey(cur, last);
+        rekeyed = true;
+      }
+      return { x: last.x, y: last.y, psr: r.psr, contrast: cur.contrast, valid: true, rekeyed };
+    }
+
+    function reset() {
+      key = null;
+      keyPos = { x: 0, y: 0 };
+      last = { x: 0, y: 0 };
+    }
+
+    return { n, push, reset };
+  }
+
   /** Converte RGBA (ImageData.data) em luminância. */
   function toGray(rgba, out) {
     for (let i = 0, j = 0; j < out.length; i += 4, j++) {
@@ -197,5 +272,5 @@
     return out;
   }
 
-  return { createPhaseCorrelator, toGray, makeFFT };
+  return { createPhaseCorrelator, createTracker, toGray, makeFFT };
 });
